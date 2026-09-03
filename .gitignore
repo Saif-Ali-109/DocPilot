@@ -1,0 +1,24 @@
+# --- Secrets ---
+.env
+
+# --- Python / uv ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+uv.lock
+build/
+dist/
+
+# --- Data / artifacts ---
+data/
+.docpilot/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+
+# --- Logs ---
+*.log
