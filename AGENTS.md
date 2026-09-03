@@ -42,3 +42,10 @@ Concretely: don't sprinkle `groq.chat(...)` or `qdrant_client.search(...)` calls
 - Keep README/pitch language honest: don't describe capabilities (e.g. code validation) as implemented if they're still Phase 6 and unbuilt.
 - Every retrieval/tool decision the agent makes at runtime should be loggable/inspectable — this is a stated project requirement, not a nice-to-have.
 - Prefer fewer, well-scoped interfaces over premature generalization; the framework-extraction goal is explicitly deferred, so don't over-engineer for a framework that doesn't exist yet.
+
+## Version control
+
+- Repo: `https://github.com/Saif-Ali-109/DocPilot.git`, branch `main`.
+- Keep the repo synced with the work: commit every task and every phase as it completes (see PLAN.md §11).
+- Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`, `build:`). Cut a phase-milestone commit/tag when a phase's exit criteria are met.
+- Never commit secrets or `.env`. Push to `origin/main` after each meaningful commit batch.

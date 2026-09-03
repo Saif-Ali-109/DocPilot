@@ -88,6 +88,11 @@
     Only AGENT A runs uv sync / installs dependencies (owns pyproject.toml,
     uv.lock). Other agents list needed deps for A in deps.md; they do NOT
     modify pyproject.toml / uv.lock themselves.
+- rule_git: >
+    Every agent commits and pushes its OWN task's output (see §11 git_workflow).
+    Commit when the task is complete and its tests pass. Never commit another
+    agent's files. This keeps git history synced with the working tree as work
+    progresses.
 
 ## 2.3 agents
 
@@ -319,3 +324,33 @@
     Implement what's asked, but note Phase 4 is still owed and nothing about
     "agentic RAG being better" is proven yet.
 - unsure_of_phase: Ask before restructuring existing code to fit it.
+
+## 11. git_workflow
+- repo: https://github.com/Saif-Ali-109/DocPilot.git
+- branch: main
+- rule: >
+    Keep the repo in sync with the work. Commit every task and every phase as
+    it completes. The git history must mirror the build progression so each
+    change is attributable and reviewable.
+- commit_units:
+  - per_task: >
+      Commit at the end of each sub-agent task (one task may span multiple
+      small commits if it is large). Each commit must be self-contained and
+      leave the working tree in a passing/runnable state where practical.
+  - per_phase: >
+      When a phase's exit criteria are met, cut a phase milestone commit (tag
+      the phase, e.g. phase-1-complete) before moving to the next phase.
+- message_format: |
+    Conventional Commits: <type>(<scope>): <subject>
+
+    <body>
+
+    types: feat, fix, refactor, docs, test, chore, build
+- scope_examples: [ingestion, retrieval, generation, citations, cli, db, config, corpus, tests]
+- commit_hygiene:
+  - Never commit secrets or .env (git-ignored).
+  - No raw vendor keys or connection passwords in the tree at any point.
+  - Push to origin/main after each meaningful commit batch.
+- status_file: >
+    PLAN.md §2.5 (exit criteria) drives phase completion. A phase-milestone
+    commit is only created when its checklist is satisfied.
