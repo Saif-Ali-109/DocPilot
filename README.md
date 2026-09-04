@@ -10,7 +10,7 @@ DocPilot ingests Markdown/MDX documentation (code blocks, nested headings, cross
 
 - Ingestion: FastAPI docs corpus → Markdown-aware semantic chunking → BGE-small embeddings → pgvector
 - Retrieval: exact cosine search (top-k)
-- Generation: Groq `llama-3.1-8b-instant`, temperature 0, retry/backoff
+- Generation: Groq `openai/gpt-oss-20b`, temperature 0, retry/backoff
 - Output: cited answers with inline `[1]` source markers + footer
 - CLI: `python -m docpilot ingest [--debug]` · `python -m docpilot ask "..." [--debug] [--json]`
 

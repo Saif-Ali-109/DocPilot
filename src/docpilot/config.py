@@ -27,7 +27,7 @@ POSTGRES_USER: str = _require("POSTGRES_USER")
 POSTGRES_PASSWORD: str = _require("POSTGRES_PASSWORD")
 
 # --- Secrets (optional, sensible defaults) ---
-GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 GROQ_MAX_RETRIES: int = int(os.getenv("GROQ_MAX_RETRIES", "3"))
 
 # --- Database ---

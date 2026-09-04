@@ -38,7 +38,7 @@
     Vector DB   : pgvector, localhost:5432, db=docpilot
     Schema      : single `chunks` table (see SPEC.md §3.4)
     ANN index   : NONE in Phase 1 (exact cosine search; corpus ~1-3k rows)
-    LLM         : Groq llama-3.1-8b-instant (via .env GROQ_MODEL), temp=0, retry+backoff
+    LLM         : Groq openai/gpt-oss-20b (via .env GROQ_MODEL; was llama-3.1-8b-instant, retired on Groq), temp=0, retry+backoff
     Chunking    : Markdown-aware semantic; ~500-800 tokens; ~50-100 overlap;
                   code blocks + tables intact; heading-hierarchy metadata
     Citations   : inline [1] markers + source footer

@@ -65,7 +65,7 @@ Docs → Parsing → Code-aware chunking → Local embeddings → pgvector → R
 | Config | `.env` file | Secrets never hardcoded or committed |
 | Embeddings | `BAAI/bge-small-en-v1.5` | 384 dimensions, local via `sentence-transformers` |
 | Vector DB | pgvector (PostgreSQL extension) | Running locally, `localhost:5432` |
-| LLM | Groq `llama-3.1-8b-instant` | Verified active on Groq (Aug 2026). Fast iteration; small model for debugging RAG, not winning benchmarks. Model ID configurable via `.env` (`GROQ_MODEL`) |
+| LLM | Groq `openai/gpt-oss-20b` | *Was* `llama-3.1-8b-instant`, retired from Groq (returns 404 for all keys, Sep 2026). Replacement chosen after live probing of available models for citation discipline (answered with correct `[1]` markers) and instruction-following. Model ID configurable via `.env` (`GROQ_MODEL`), never hardcoded in business logic |
 | Async | None | Synchronous pipeline; async introduced at Phase 5 API boundary |
 
 ### 3.4 Database
@@ -141,7 +141,7 @@ The `Chunker` interface allows swapping strategies later for benchmarking.
 | Property | Value |
 |----------|-------|
 | Provider | Groq |
-| Model | `llama-3.1-8b-instant` (model ID from `.env` `GROQ_MODEL`, default in code) |
+| Model | `openai/gpt-oss-20b` (model ID from `.env` `GROQ_MODEL`, default in code) |
 | API key | Via `.env` (`GROQ_API_KEY`) |
 | Retry/backoff | Yes — retry transient failures (network, 429 rate-limit, 5xx) with exponential backoff + jitter; fail the request only after `GROQ_MAX_RETRIES` attempts. Required so eval latency/failure metrics reflect RAG behaviour, not flaky HTTP |
 | Temperature | 0 (deterministic, repeatable answers for evaluation) |
@@ -270,7 +270,7 @@ All components are behind interfaces (abstract base classes or protocols). Even 
 | `Reranker` | Not implemented in Phase 1 |
 | `Tool` | Not implemented in Phase 1 |
 | `Agent` | Not implemented in Phase 1 |
-| `Generator` | Groq llama-3.1-8b-instant |
+| `Generator` | Groq openai/gpt-oss-20b (via .env GROQ_MODEL) |
 | `CitationEngine` | Inline [1] marker + source footer |
 | `Evaluator` | Not implemented in Phase 1 |
 
@@ -323,7 +323,7 @@ docpilot/
 
 ```
 GROQ_API_KEY=
-GROQ_MODEL=llama-3.1-8b-instant
+GROQ_MODEL=openai/gpt-oss-20b
 GROQ_MAX_RETRIES=3
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
