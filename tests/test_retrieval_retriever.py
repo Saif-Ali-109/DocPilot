@@ -277,6 +277,23 @@ class TestPgVectorStoreIntegration:
         except Exception as exc:
             pytest.skip(f"PostgreSQL unavailable: {exc}")
 
+    @pytest.fixture(autouse=True)
+    def _cleanup(self):
+        """Remove test fixture rows from the shared DB after each test.
+
+        These integration tests write marker source_files
+        (``_integration_*.md``) straight into the real ``chunks`` table;
+        without teardown they pollute production retrieval.
+        """
+        yield
+        if getattr(self, "_store", None) is not None:
+            try:
+                self._store.delete_by_source(
+                    ["_integration_test.md", "_integration_del.md", "_integration_search.md"]
+                )
+            except Exception:
+                pass
+
     def test_add_and_count(self) -> None:
         # Clean slate
         self._store.delete_by_source(["_integration_test.md"])
