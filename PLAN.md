@@ -241,16 +241,177 @@
 ---
 
 ## 3. phase_2: "Agentic Retrieval"
-- status: PLANNED
+
+- status: PLANNED (flips to ACTIVE when the phase-1-complete milestone is cut)
 - summary: >
-    Add LangGraph and build a conditional agentic loop: analyze → search →
-    judge evidence sufficiency → reformulate/retry → answer or refuse.
-- guardrail: >
-    Simple questions route straight through classic RAG (fast/cheap). Agentic
-    looping is conditional only (multi-hop/ambiguous), never mandatory.
-- exit_criteria: >
-    Agent correctly decides loop vs. direct answer. Measurable improvement over
-    Phase 1 baseline on multi-hop questions (tracked in Phase 4).
+    LangGraph conditional loop behind the `Agent` interface (PLAN §9 interfaces,
+    first implementation). The loop analyzes → searches → judges evidence
+    sufficiency → reformulates/retries → answers or refuses — while simple
+    questions keep routing through the Phase 1 classic-RAG fast path unchanged.
+- locked_decisions: |
+    Engine      : LangGraph (SPEC §4). Loop = gate → retrieve → judge →
+                  reformulate|answer+cite|refuse StateGraph.
+    Gate        : Heuristic QueryClassifier ONLY (zero LLM calls, deterministic):
+                  word-count, connector words (and/or/how/combine/difference…),
+                  multi tech-term detection → direct | agentic.
+    Judge       : LLMSufficiencyJudge, ONE LLM call per retry, structured output
+                  {verdict: sufficient|insufficient|ambiguous, reason,
+                  reformulated_query|null}. reformulated_query is its own field
+                  (never part of an unstructured blob) — folded into the judge
+                  today, splittable into a real Reformulator later by swapping
+                  internals only, never the judge's call site.
+    Fast path   : pipeline_ask.ask() untouched; default behavior identical to Phase 1.
+    CLI         : ask --strategy auto|direct|agentic (default auto). NO --agentic
+                  alias/shorthand — one way to do one thing (§10.4).
+    Retries     : AGENT_MAX_RETRIES (default 2); budget hard-enforced in the graph;
+                  exhausted → refuse with the SPEC §3.9 "I don't know" wording.
+    Tracing     : OUR LoopTraceStep only. LangGraph/LangSmith tracing explicitly
+                  NOT used (vendor surface not in the interface table).
+    Latency     : Per-step ms collected in the trace for inspectability ONLY
+                  (§10.2). NO aggregates, NO Phase1-vs-2 comparison, NO
+                  "X% faster" claims in Phase 2 docs — that is Phase 4 work.
+    Approach    : draft the seed question set from the corpus; formal benchmark
+                  dataset + metrics belong to Phase 4 and are NOT built here.
+
+## 3.1 graph
+
+```
+(question) ──► [gate] ── direct ──► classic ask() fast path (exact Phase 1)
+                 │  agentic
+                 ▼
+            [retrieve]   (reuses SimpleRetriever)
+                 ▼
+            [judge]      (LLM: verdict + reason + reformulated_query)
+                 │
+    ┌────────────┼──────────────────────────┐
+    │ SUFFICIENT │ INSUFFICIENT/AMBIGUOUS   │ EXHAUSTED BUDGET
+    ▼            ▼                          ▼
+ [answer+cite] [reformulate]──count ≤ max?─► [answer+cite]
+    (GEN reuse)              │ > max
+                             └─────────────► [refuse]  ("I don't know")
+```
+
+## 3.2 files & ownership (mirrors §2.3)
+
+- NOTE: `src/docpilot/agent/types.py` is the Phase 2 shared contract (write-once,
+  owned by AGENT F like §2.1; AGENT G treats it read-only). No contract_version
+  bump in core/models.py — Phase 2 types live in agent/types.py.
+
+### AGENT F — Agent core components ("the brain")
+- files_owned:
+  - src/docpilot/agent/__init__.py
+  - src/docpilot/agent/interface.py    # Agent (ABC) + AgentResult dataclass
+  - src/docpilot/agent/types.py        # shared contract: GateDecision, Judgment,
+                                       # LoopTraceStep, loop state types (write-once)
+  - src/docpilot/agent/gate.py         # QueryClassifier ABC + HeuristicQueryClassifier
+  - src/docpilot/agent/judge.py        # SufficiencyJudge ABC + LLMSufficiencyJudge (folded reformulation)
+  - src/docpilot/agent/prompts.py      # judge + reformulation prompts (SPEC §3.9 style honesty rules)
+  - src/docpilot/agent/questions.py    # shared seed question set (§3.8)
+  - tests/test_agent_gate.py
+  - tests/test_agent_judge.py          # verdict parsing, reformulated_query field
+  - tests/test_agent_types.py
+- guards:
+  - Gate makes ZERO LLM calls; classify is pure/deterministic.
+  - Unit tests hermetic — no live API/DB; judge tested with a stubbed Generator.
+  - Verdict parsing tolerant of prompt-drift (JSON with regex/YAML fallback); loop never crashes.
+  - Never invents citations or revisions outside the structured fields.
+
+### AGENT G — LangGraph wiring + pipeline + CLI (depends on F COMPLETE)
+- files_owned:
+  - src/docpilot/agent/graph.py           # builds the StateGraph from injected components
+  - src/docpilot/agent/pipeline_agentic.py# agentic_ask(...) orchestrator → AgentResult
+  - src/docpilot/cli.py                   # ask --strategy auto|direct|agentic; --json "trace"
+  - tests/test_agent_graph.py             # routing + budget with injected fakes
+  - tests/test_agent_pipeline.py          # E2E via CLI with injected fakes
+- guards:
+  - LangGraph code contains NO vendor calls; all LLM/DB work behind injected interfaces.
+  - Budget hard-enforced at graph level (max AGENT_MAX_RETRIES judge calls).
+  - Trace always produced; --json output stays backward-compatible (additive "trace" key).
+
+### COORDINATOR — shared, cross-cutting
+- deps.md: declare `langgraph` (AGENT A runs uv sync; pyproject/uv.lock single-owner).
+- conftest.py shared agent fixtures; seed set; PLAN §3 + SPEC §4 final text.
+- Manual QA on the seed set; milestone commit/tag when exit criteria are met.
+
+## 3.3 interfaces (concise)
+
+- QueryClassifier(ABC).classify(question) -> GateDecision  # direct | agentic
+- SufficiencyJudge(ABC).judge(context, sources, question) -> Judgment
+  # Judgment{verdict, reason, reformulated_query|None}  — structured, single LLM call
+- Agent(ABC).run(question, *, retriever, generator, judge, citation_engine,
+  strategy="auto", top_k=None) -> AgentResult
+  # AgentResult = AskResult + trace; "direct" strategy == classic ask()
+- AgentResult embeds the existing AskResult; "auto" = gate decides.
+
+## 3.4 trace & inspectability
+
+Every LoopTraceStep: turn # → query_used, verdict, reason, reformulated_query,
+retrieved_count + top scores, step label, step latency ms.
+- stderr DEBUG logging (same stream discipline as Phase 1); --json "trace" key.
+- Latency fields exist for inspectability only — no aggregates/comparisons here (§10.2).
+
+## 3.5 config (.env, new keys)
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| AGENT_MAX_RETRIES | 2 | Max judge/reformulate iterations |
+| AGENT_DEFAULT_STRATEGY | auto | CLI overridable via --strategy |
+| AGENT_GATE_LONG_THRESHOLD | 18 | Word-count gate trigger |
+| AGENT_JUDGE_MODEL | (empty → GROQ_MODEL) | Optional separate judge model |
+
+## 3.6 test strategy
+
+- Hermetic: gate (pure), judge (stubbed Generator), graph routing, budget, CLI
+  (injected fakes). Integration variants marked `integration`, skip-if-unreachable.
+- Regression: fast path — simple questions produce IDENTICAL output to Phase 1
+  (existing E2E + manual spot check).
+
+## 3.7 exit_criteria
+
+- Gate correct on the seed set (multi-hop → agentic; simple → direct).
+- Loop answers multi-hop seed questions with correct [N] citations + footer.
+- Budget enforced (≤ AGENT_MAX_RETRIES); refuse after budget.
+- "I don't know" (SPEC §3.9) when evidence stays insufficient.
+- Fast path regression: simple questions identical to Phase 1.
+- Trace per query in --debug (stderr) and --json ("trace").
+- All behind Agent interface; LangGraph code no vendor calls; our tracing only.
+- CLI surface exactly ask --strategy auto|direct|agentic.
+- Phase 2 claims NO performance numbers / no Phase1-vs-2 comparison.
+- Full test suite green; agent tests hermetic.
+
+## 3.8 seed_question_set (dev + Phase 2 manual QA; NOT the Phase 4 benchmark)
+
+- multi_hop: >
+    1. Combine path, query, and body parameters in one endpoint — validation rules per kind?
+    2. Do dependencies interact with path operations — one dependency validating params and
+       helping produce the response, shared state passing?
+    3. Exception raised inside a dependency — interaction with exception handlers/middleware?
+    4. Same Pydantic model for request-body validation AND response_model — differences?
+    5. Background tasks vs yield-dependencies — when does cleanup really run?
+    6. Annotated[...] = Depends(...) vs legacy = Depends(...) — difference, mixable?
+    7. WebSocket endpoint + HTTP route sharing one auth dependency — wiring?
+    8. OAuth2 security scopes + custom dependency to restrict routes?
+- simple (must stay on fast path): 9. "How do I install FastAPI?" 10. "What is a query parameter in FastAPI?"
+- refuse: 11. Auto-cache DB queries without extra code (uncovered → loop → refuse).
+  12. Live OAuth token-expiration bug status (live state → Phase 3 territory → refuse in Phase 2).
+
+## 3.9 execution_order
+
+1. Cut phase-1-complete (ingest + idempotency + English QA + §2.5/§3.18 statuses).
+2. deps.md ← langgraph; AGENT A uv sync.
+3. AGENT F (contract + gate/judge/types/prompts/questions + tests).
+4. AGENT G (graph + pipeline + CLI --strategy + trace + tests).
+5. Coordinator: fold SPEC §4 final text (done with this update), manual seed QA,
+   flip §3 status to COMPLETE + tag phase-2 when §3.7 met.
+6. Measurable improvement claims deferred to Phase 4 — never asserted here.
+
+## 3.10 resolved_decisions (user sign-off 2026-09-05)
+
+1. Reformulation folded into judge; reformulated_query stays its own structured field
+   (splittable later without redesigning the call site).
+2. Per-step latency in trace only; no aggregates/comparisons/claims in Phase 2.
+3. Our LoopTraceStep only; no LangGraph/LangSmith tracing.
+4. ask --strategy auto|direct|agentic only; no --agentic alias.
 
 ## 4. phase_3: "MCP / GitHub Tooling"
 - status: PLANNED

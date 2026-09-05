@@ -377,20 +377,86 @@ Because Phase 4 evaluation must trust "answer correctness," Phase 1 needs unit-l
 
 ---
 
-## 4. Phase 2 — Agentic Retrieval (Outline)
+## 4. Phase 2 — Agentic Retrieval
 
-Add LangGraph and build a conditional agentic loop:
+Implements the conditional agentic loop behind the `Agent` interface (first
+implementation; PLAN §9 interface list). Fast path (Phase 1 `pipeline_ask.ask`)
+stays untouched — default `ask` behavior is identical to Phase 1.
 
-1. Analyze the question.
-2. Search the documentation.
-3. Evaluate whether retrieved evidence is sufficient.
-4. Reformulate/retry the search if not sufficient.
-5. Stop and answer when evidence is sufficient.
-6. Refuse with "I don't know" when evidence stays insufficient.
+### 4.1 Locked decisions (2026-09-05, user sign-off)
 
-**Guardrail:** Simple questions route straight through classic RAG (fast, cheap). Agentic looping is conditional — only for multi-hop or ambiguous queries. Never mandatory for every query.
+- **Engine: LangGraph.** Loop graph: gate → retrieve → judge → (reformulate |
+  answer+cite | refuse).
+- **Gate: heuristics only, zero LLM calls.** Word-count, connector words
+  (and/or/how/combine/difference…), multiple distinct tech terms →
+  `direct | agentic`. Deterministic and instant.
+- **Judge: LLMSufficiencyJudge, one LLM call per retry.** Structured output
+  `{verdict: sufficient|insufficient|ambiguous, reason, reformulated_query|null}`.
+  `reformulated_query` is its own field (never an unstructured blob): reformulation
+  is folded into the judge today, but a future real `Reformulator` can replace
+  internals without changing the judge's call site.
+- **Budget:** `AGENT_MAX_RETRIES` (default 2), hard-enforced in the graph;
+  exhausted → refuse with the §3.9 "I don't know" wording.
+- **Tracing:** our `LoopTraceStep` only. LangGraph/LangSmith observability is NOT
+  used — it is vendor surface outside the interface table.
+- **CLI:** `ask --strategy auto|direct|agentic` (default `auto`). No `--agentic`
+  alias — one way to do one thing.
+- **Latency discipline:** per-step latencies are recorded in the trace for
+  inspectability (applies from day one, §10). Phase 2 computes no aggregates,
+  draws no classic-vs-agentic comparison, and claims no performance win — all of
+  that is Phase 4 evaluation work.
 
-**Exit criteria (Phase 2):** The agent correctly decides when to loop vs. when to answer directly. Measurable improvement over Phase 1 baseline on multi-hop questions (tracked in Phase 4).
+### 4.2 Components
+
+| Component | Responsibility | Lives in |
+|---|---|---|
+| `QueryClassifier` (ABC) + `HeuristicQueryClassifier` | classify(question) → `direct` \| `agentic`; no LLM | `agent/gate.py` |
+| `SufficiencyJudge` (ABC) + `LLMSufficiencyJudge` | judge(context, sources, question) → `Judgment` (one LLM call, structured) | `agent/judge.py` |
+| `Agent` (ABC) + `AgentResult` | run(question, *, deps…, strategy) → AskResult + trace; `direct` strategy = classic ask() | `agent/interface.py` |
+| `StateGraph` | routes gate/retrieve/judge/reformulate/answer/refuse; enforces budget | `agent/graph.py` |
+| `agentic_ask` | orchestrator entry point | `agent/pipeline_agentic.py` |
+
+Shared contract: `agent/types.py` (`GateDecision`, `Judgment`, `LoopTraceStep`,
+loop state) — write-once, all agents treat as read-only. `core/models.py` is
+unchanged (contract_version 1.0).
+
+### 4.3 Config
+
+| Key | Default | Purpose |
+|---|---|---|
+| `AGENT_MAX_RETRIES` | 2 | Max judge/reformulate iterations |
+| `AGENT_DEFAULT_STRATEGY` | auto | CLI overridable via `--strategy` |
+| `AGENT_GATE_LONG_THRESHOLD` | 18 | Word-count gate trigger |
+| `AGENT_JUDGE_MODEL` | (empty → `GROQ_MODEL`) | Optional separate judge model |
+
+### 4.4 Trace
+
+Every `LoopTraceStep`: turn # → `query_used`, `verdict`, `reason`,
+`reformulated_query`, `retrieved_count` + top scores, step label, step `latency_ms`.
+Logged at DEBUG on stderr; surfaced as additive `"trace"` in `--json`. Latency
+fields are for inspectability only (§4.1).
+
+### 4.5 Exit criteria (Phase 2)
+
+- Gate is correct on the seed question set (multi-hop → agentic, simple → direct).
+- Loop answers the multi-hop seed questions with correct `[N]` citations + footer.
+- Budget enforced (≤ `AGENT_MAX_RETRIES`), then refuses.
+- "I don't know" (exact §3.9 wording) when evidence stays insufficient.
+- Fast-path regression: simple questions behave identically to Phase 1.
+- Trace per query in `--debug` (stderr) and `--json` (`"trace"`).
+- All behind the `Agent` interface; LangGraph code has no vendor calls; our
+  tracing only; CLI surface is exactly `--strategy auto|direct|agentic`.
+- Phase 2 produces no performance numbers or Phase-1-vs-2 comparisons.
+- Full test suite green; agent tests hermetic (stubbed Generator), integration
+  variants marked and skip-if-unreachable.
+
+**Guardrail (unchanged):** Simple questions route straight through classic RAG
+(fast, cheap). Agentic looping is conditional — only for multi-hop or ambiguous
+queries. Never mandatory for every query.
+
+**Measurable-improvement note:** the formal classic-vs-agentic comparison and its
+metrics are Phase 4 work. Phase 2's exit criteria above are functional and
+inspectable; no improvement claim is made here.
 
 ---
 
