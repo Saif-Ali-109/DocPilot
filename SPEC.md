@@ -2,7 +2,7 @@
 
 **Version:** 0.1.0 (Phase 1)
 **Status:** Approved
-**Last updated:** 2026-09-04
+**Last updated:** 2026-09-05 (§7 amended: Chainlit replaces Streamlit — see rationale in §7)
 
 ---
 
@@ -434,9 +434,11 @@ Only after the RAG/agent core is working and evaluated.
 - Source citations surfaced in the UI
 - Retrieved-context debug panel
 - Basic session/chat history (SQLite)
-- Streamlit first; React/Next.js only if time allows
+- **Chainlit** first; React/Next.js only if time allows
 
-**Guardrail:** Frontend polish never delays or distorts the RAG/agent core.
+**Amendment (2026-09-05):** Originally Streamlit. Swapped to Chainlit — it's built directly on FastAPI/Starlette (matching the async backend introduced at this phase rather than sitting beside it), has native token streaming, built-in citation elements, a built-in `Step` UI for showing intermediate tool/retrieval/agent steps (a natural fit for the Phase 2 `LoopTraceStep` trace), and built-in chat-history persistence (SQLite/Postgres) instead of hand-rolled session state. No functional requirement above changed — only the framework used to satisfy them.
+
+**Guardrail:** Frontend polish never delays or distorts the RAG/agent core. This amendment does not pull Phase 5 work forward — Phase 2/3/4 still come first per §2's hard rules.
 
 ---
 
