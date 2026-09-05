@@ -4,6 +4,12 @@
 
 This is also the learning/validation project for a future reusable RAG framework — DocPilot comes first, the framework gets extracted from it later, not the other way around.
 
+## Source of truth
+
+- **SPEC.md is the source of truth** — the approved spec holds every locked decision for every phase.
+- **PLAN.md is the working state**, derived from SPEC.md — it holds the HOW: task breakdown, file ownership, execution order, and per-phase exit checklists.
+- When they disagree, **SPEC.md wins**; update PLAN.md to match.
+
 ## Build order
 
 `Reliable classic RAG → Agentic retrieval → MCP tools → Evaluation → API/UI → optional code validation → extract reusable framework components`
@@ -19,7 +25,7 @@ This is also the learning/validation project for a future reusable RAG framework
 - **Phase 2 (Agentic retrieval):** LangGraph loop that can analyze → search → judge evidence sufficiency → reformulate/retry → answer or refuse. Simple questions must still route through the fast/cheap path — agentic looping is conditional, never mandatory for every query. If you find yourself routing everything through the agent, stop and flag it.
 - **Phase 3 (MCP/GitHub):** the agent reaches for GitHub only when static docs are demonstrably insufficient for the question. If you can't construct a real example where this is true, don't wire in the tool call for its own sake.
 - **Phase 4 (Evaluation):** a benchmark dataset and tracked metrics exist — retrieval quality, answer correctness, citation correctness, groundedness/hallucination rate, "I don't know" accuracy, latency, retrieval/tool call count — with a classic-RAG-vs-agentic-RAG comparison. Claims of improvement must be backed by this, not asserted.
-- **Phase 5 (API/UI):** FastAPI backend, streaming responses, citations and a retrieved-context debug panel surfaced in the UI, basic session/chat history. Streamlit first; React/Next.js only if there's slack in the schedule. Frontend work never delays or reshapes the RAG/agent core.
+- **Phase 5 (API/UI):** FastAPI backend, streaming responses, citations and a retrieved-context debug panel surfaced in the UI, basic session/chat history. Chainlit first (per SPEC §7); React/Next.js only if there's slack in the schedule. Frontend work never delays or reshapes the RAG/agent core.
 - **Phase 6 (Code gen/validation):** documentation retrieval → generate code → validate against retrieved API/schema/examples → return code + sources. Only after Phase 1–5 are solid.
 
 ## Interfaces (from day one, every phase)
