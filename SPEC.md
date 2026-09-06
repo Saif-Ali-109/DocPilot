@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     heading_path  TEXT,                -- e.g. "/Getting Started/Installation/"
     source_file   TEXT NOT NULL,       -- relative path to .md/.mdx file
     chunk_index   INT NOT NULL,        -- order within source file
+    language      TEXT NOT NULL DEFAULT 'en',  -- derived from source_file first path segment
     metadata      JSONB DEFAULT '{}',  -- code_block, table, heading_level, etc.
     embedding     vector(384) NOT NULL,
     created_at    TIMESTAMPTZ DEFAULT now()
@@ -166,6 +167,10 @@ RULES:
    when present in the context.
 6. Clearly distinguish what is stated in the retrieved docs vs. what is
    your interpretation.
+7. Never include code that does not appear in the provided context. Do not
+   reconstruct, extend, or embellish code examples from outside the context.
+8. Cite only the source that actually backs each claim; never cite a source
+   merely because it is present in the context.
 
 CONTEXT:
 {context}
@@ -203,12 +208,13 @@ Sources:
 python -m docpilot ingest [--debug]
 
 # Ask a question
-python -m docpilot ask "How do I install FastAPI?" [--debug] [--json]
+python -m docpilot ask "How do I install FastAPI?" [--debug] [--json] [--lang <tag>]
 ```
 
 **Flags:**
 - `--debug`: enables detailed logging (retrieval scores, prompts, raw LLM response for `ask`; chunk stats for `ingest`)
 - `--json`: outputs structured JSON instead of plain text (only for `ask`)
+- `--lang <tag>`: retrieval language filter (default `RETRIEVAL_LANGUAGE`, i.e. `en`; `any` disables filtering and returns chunks from every corpus language) — added 2026-09-06 to fix mixed-language retrieval
 
 **Output — plain text (default):**
 ```
@@ -334,6 +340,7 @@ EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
 CHUNK_SIZE_TARGET=650
 CHUNK_OVERLAP=75
 RETRIEVAL_TOP_K=5
+RETRIEVAL_LANGUAGE=en
 ```
 
 No `.env.example` file — document keys in SPEC.md and README only.
@@ -356,24 +363,32 @@ Because Phase 4 evaluation must trust "answer correctness," Phase 1 needs unit-l
 
 **Test runner:** `pytest` (dev dependency). Tests must not require a live Postgres/Groq connection to run the fast unit suite — use fakes/in-memory stores for interface tests; a separate opt-in/labeled integration suite covers real pgvector.
 
-### 3.18 Exit Criteria (Phase 1 Done)
+### 3.18 Exit Criteria (Phase 1 Done) — verified 2026-09-06
 
-- [ ] Ingestion pipeline runs end-to-end: fetch FastAPI docs → parse → chunk → embed → store in pgvector
-- [ ] Corpus version pinned and recorded (`docs/CORPUS.md` with commit hash)
-- [ ] Ingest is idempotent — re-running does not duplicate chunks (delete-by-`source_file` before insert)
-- [ ] `python -m docpilot ask "..."` returns a cited answer with correct source references
-- [ ] `python -m docpilot ask --json "..."` returns structured JSON output
-- [ ] `--debug` flag works on both `ingest` and `ask`
-- [ ] "I don't know" response works when context is insufficient
-- [ ] Debug view shows retrieved chunks, scores, and full prompt
-- [ ] All components behind interfaces (no direct vendor calls in business logic)
-- [ ] Groq calls have retry/backoff; temperature = 0
-- [ ] Retrieval quality is measurable (manual review of top-k results for sample queries)
-- [ ] Answer quality is measurable (manual review with citation checking)
-- [ ] Logging to stderr, no secrets exposed
-- [ ] Unit tests per interface implementation pass (§3.17)
-- [ ] End-to-end test passes: ingest fixture → ask → answer + citations verified (§3.17)
-- [ ] Exact (non-ANN) vector search confirmed working; no IVFFlat index in place
+- [x] Ingestion pipeline runs end-to-end: fetch FastAPI docs → parse → chunk → embed → store in pgvector
+- [x] Corpus version pinned and recorded (`docs/CORPUS.md` with commit hash)
+- [x] Ingest is idempotent — re-running does not duplicate chunks (delete-by-`source_file` before insert)
+- [x] `python -m docpilot ask "..."` returns a cited answer with correct source references
+- [x] `python -m docpilot ask --json "..."` returns structured JSON output
+- [x] `--debug` flag works on both `ingest` and `ask`
+- [x] "I don't know" response works when context is insufficient
+- [x] Debug view shows retrieved chunks, scores, and full prompt
+- [x] All components behind interfaces (no direct vendor calls in business logic)
+- [x] Groq calls have retry/backoff; temperature = 0
+- [x] Retrieval quality is measurable (manual review of top-k results for sample queries)
+- [x] Answer quality is measurable (manual review with citation checking)
+- [x] Logging to stderr, no secrets exposed
+- [x] Unit tests per interface implementation pass (§3.17)
+- [x] End-to-end test passes: ingest fixture → ask → answer + citations verified (§3.17)
+- [x] Exact (non-ANN) vector search confirmed working; no IVFFlat index in place
+- [x] Retrieval is language-filtered — English default; English queries return English chunks and English citations only (fix 2026-09-06)
+
+**Live verification evidence (2026-09-06, full corpus):**
+- Corpus ingested completely: 16,535 chunks / 1,657 files — disk ↔ DB set-diff shows 0 missing, 0 extra.
+- Idempotency probe: deleting + re-ingesting `en/docs/tutorial/first-steps.md` through the real pipeline stays flat at 25 chunks across runs; no duplication, no leaked fixture rows (0 `%integration%` rows).
+- `language` column backfilled from `source_file` (13 language tags; no nulls; `en` = 2,416 chunks).
+- Post-fix English QA (live Groq + pgvector): "How do I install FastAPI?", "What is a query parameter in FastAPI?", "How do I run FastAPI with uvicorn?" — all retrieved chunks and all cited sources are English and grounded. `--lang any` restores unfiltered (multi-language) retrieval.
+- Full test suite: 134 passed (131 hermetic + 3 live pgvector integration).
 
 ---
 

@@ -15,7 +15,7 @@
     optional code validation → extract reusable framework components.
     Do not skip ahead. Do not let later phases' ambitions leak into earlier
     phases' scope.
-- current_phase: 1
+- current_phase: 2
 - working_repo: https://github.com/Saif-Ali-109/DocPilot.git
 - working_dir: /home/ain/Desktop/RAG
 - spec_source_of_truth: >
@@ -24,9 +24,9 @@
 
 ---
 
-## 2. phase_1_active: "Excellent Classic RAG (the baseline)"
+## 2. phase_1_active: "Excellent Classic RAG (the baseline)" — COMPLETE 2026-09-06
 
-- status: ACTIVE
+- phase_1_status: COMPLETE (milestone `phase-1-complete` cut 2026-09-06)
 - pipeline: >
     Docs → parsing → code-aware chunking → local embeddings → pgvector →
     retrieval → Groq LLM → cited answer
@@ -238,11 +238,20 @@
 - e2e_test: E2E test passes with fake Generator
 - exact_search: Exact (non-ANN) cosine search verified; no IVFFlat index
 
+### 2.6 phase_1_verification (2026-09-06, live corpus)
+
+- corpus_complete: 16,535 chunks / 1,657 files — disk ↔ DB set-diff: 0 missing, 0 extra
+- idempotent_probe: re-ingesting `en/docs/tutorial/first-steps.md` twice through the real pipeline → 25 chunks flat (delete-by-source then re-insert, no duplication)
+- fixture_hygiene: 0 `%integration%` leaked rows
+- language_filter: `chunks.language` column backfilled from source_file (13 tags, no nulls, en=2,416); default retrieval `RETRIEVAL_LANGUAGE=en`; `ask --lang <tag>` / `--lang any`
+- english_qa: post-fix English queries retrieve English chunks only; cited sources English and grounded
+- suite: 134 passed (131 hermetic + 3 live pgvector integration)
+
 ---
 
 ## 3. phase_2: "Agentic Retrieval"
 
-- status: PLANNED (flips to ACTIVE when the phase-1-complete milestone is cut)
+- status: ACTIVE (flipped at the phase-1-complete milestone, 2026-09-06)
 - summary: >
     LangGraph conditional loop behind the `Agent` interface (PLAN §9 interfaces,
     first implementation). The loop analyzes → searches → judges evidence
