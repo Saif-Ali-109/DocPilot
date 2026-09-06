@@ -198,7 +198,8 @@ def test_ingest_debug_reports_chunk_stats(capsys) -> None:
     assert "Chunk size stats" in err
     assert "Chunks per source file" in err
     assert all(
-        src in err for src in ("guide/installation.md", "tutorial/first-steps.md")
+        src in err
+        for src in ("en/docs/guide/installation.md", "en/docs/tutorial/first-steps.md")
     )
     # stdout stays a single summary line even in debug mode.
     assert captured.out.strip().startswith("Ingested ")

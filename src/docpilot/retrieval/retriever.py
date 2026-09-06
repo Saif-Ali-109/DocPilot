@@ -7,8 +7,17 @@ class Retriever(ABC):
     """Interface for high-level semantic retrieval."""
 
     @abstractmethod
-    def retrieve(self, query: str, top_k: int = 5) -> list[RetrieverResult]:
-        """Embed the query and return top_k results from the vector store."""
+    def retrieve(
+        self, query: str, top_k: int = 5, *, language: str | None = None
+    ) -> list[RetrieverResult]:
+        """Embed the query and return top_k results from the vector store.
+
+        Args:
+            query: The user's natural-language query.
+            top_k: Maximum results to return.
+            language: If set, restrict results to chunks matching this
+                language tag. ``None`` disables filtering.
+        """
         ...
 
 
@@ -33,13 +42,17 @@ class SimpleRetriever(Retriever):
         self._embedding_provider = embedding_provider
         self._vector_store = vector_store
 
-    def retrieve(self, query: str, top_k: int | None = None) -> list[RetrieverResult]:
+    def retrieve(
+        self, query: str, top_k: int | None = None, *, language: str | None = None
+    ) -> list[RetrieverResult]:
         """Embed *query* and return the top_k most similar chunks.
 
         Args:
             query: The user's natural-language query.
             top_k: Maximum results to return.  Defaults to
                 ``config.RETRIEVAL_TOP_K`` if not provided.
+            language: If set, restrict results to chunks matching this
+                language tag. ``None`` disables filtering.
 
         Returns:
             A list of :class:`RetrieverResult` ordered by descending
@@ -53,6 +66,8 @@ class SimpleRetriever(Retriever):
         query_embedding = self._embedding_provider.embed([query])[0]
 
         # Search the vector store
-        results = self._vector_store.search(query_embedding, top_k=top_k)
+        results = self._vector_store.search(
+            query_embedding, top_k=top_k, language=language
+        )
 
         return results

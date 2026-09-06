@@ -57,7 +57,7 @@ class InMemoryVectorStore(VectorStore):
         self._chunks.extend(chunks)
         self._embeddings.extend([e.astype(np.float32) for e in embeddings])
 
-    def search(self, query_embedding: np.ndarray, top_k: int) -> list[RetrieverResult]:
+    def search(self, query_embedding: np.ndarray, top_k: int, *, language: str | None = None) -> list[RetrieverResult]:
         if not self._chunks:
             return []
         # Compute cosine similarity (embeddings are assumed unit-normed)

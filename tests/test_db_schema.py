@@ -39,6 +39,10 @@ class TestSchemaRequiredElements:
     def test_vector_384(self, schema_sql: str) -> None:
         assert "vector(384)" in schema_sql
 
+    def test_language_column(self, schema_sql: str) -> None:
+        assert "language" in schema_sql
+        assert "language      TEXT NOT NULL DEFAULT 'en'" in schema_sql
+
 
 # ---- Forbidden elements: NO ANN index in Phase 1 ----
 

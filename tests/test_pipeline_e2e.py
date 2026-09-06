@@ -17,7 +17,7 @@ import hashlib
 import numpy as np
 
 from docpilot.citations.engine import StandardCitationEngine
-from docpilot.core.models import Chunk, Document, RetrieverResult
+from docpilot.core.models import Chunk, Document, RetrieverResult, source_language
 from docpilot.embeddings.provider import EmbeddingProvider
 from docpilot.generation.generator import Generator
 from docpilot.ingestion.chunker import MarkdownChunker
@@ -34,7 +34,7 @@ from docpilot.retrieval.vector_store import VectorStore
 
 FIXTURE_DOCS: list[Document] = [
     Document(
-        file_path="guide/installation.md",
+        file_path="en/docs/guide/installation.md",
         content=(
             "# Installation\n"
             "\n"
@@ -59,7 +59,7 @@ FIXTURE_DOCS: list[Document] = [
         ),
     ),
     Document(
-        file_path="tutorial/first-steps.md",
+        file_path="en/docs/tutorial/first-steps.md",
         content=(
             "# First Steps\n"
             "\n"
@@ -78,7 +78,7 @@ FIXTURE_DOCS: list[Document] = [
         ),
     ),
     Document(
-        file_path="advanced/dependencies.md",
+        file_path="en/docs/advanced/dependencies.md",
         content=(
             "# Dependencies\n"
             "\n"
@@ -181,24 +181,35 @@ class InMemoryVectorStore(VectorStore):
             )
             self._vectors.append(np.asarray(emb, dtype=np.float32).reshape(-1))
 
-    def search(self, query_embedding: np.ndarray, top_k: int) -> list[RetrieverResult]:
+    def search(
+        self,
+        query_embedding: np.ndarray,
+        top_k: int,
+        *,
+        language: str | None = None,
+    ) -> list[RetrieverResult]:
         if not self._chunks:
             return []
         query = np.asarray(query_embedding, dtype=np.float32).reshape(-1)
         q_norm = float(np.linalg.norm(query))
-        scores: list[float] = []
-        for vec in self._vectors:
+        # Candidates: chunks matching the language filter (WHERE language = %s),
+        # mirroring the production SQL's filtering before ranking.
+        candidates = [
+            (i, c, v)
+            for i, (c, v) in enumerate(zip(self._chunks, self._vectors))
+            if language is None or source_language(c.source_file) == language
+        ]
+        scored: list[tuple[int, Chunk, float]] = []
+        for i, chunk, vec in candidates:
             v_norm = float(np.linalg.norm(vec))
             if q_norm == 0.0 or v_norm == 0.0:
-                scores.append(0.0)
+                score = 0.0
             else:
-                scores.append(float(np.dot(query, vec) / (q_norm * v_norm)))
-        order = sorted(
-            range(len(self._chunks)), key=lambda i: scores[i], reverse=True
-        )[:top_k]
+                score = float(np.dot(query, vec) / (q_norm * v_norm))
+            scored.append((i, chunk, score))
+        selections = sorted(scored, key=lambda t: t[2], reverse=True)[:top_k]
         results: list[RetrieverResult] = []
-        for i in order:
-            chunk = self._chunks[i]
+        for _i, chunk, score in selections:
             meta = dict(chunk.metadata)
             chunk_id = meta.pop("chunk_id", chunk.id)
             results.append(
@@ -211,7 +222,7 @@ class InMemoryVectorStore(VectorStore):
                         chunk_index=chunk.chunk_index,
                         metadata=meta,
                     ),
-                    score=scores[i],
+                    score=score,
                 )
             )
         return results
@@ -467,7 +478,7 @@ def test_code_and_table_integrity_through_pipeline() -> None:
 
     # The FastAPI sample app code block survives verbatim.
     steps_chunk = next(
-        c for c in stored if c.source_file == "tutorial/first-steps.md"
+        c for c in stored if c.source_file == "en/docs/tutorial/first-steps.md"
     )
     assert steps_chunk.metadata.get("code_block")
     assert steps_chunk.content.startswith("Create a file named `main.py`:")
@@ -477,7 +488,7 @@ def test_code_and_table_integrity_through_pipeline() -> None:
 
     # The Markdown table survives as consecutive rows in one chunk.
     install_chunk = next(
-        c for c in stored if c.source_file == "guide/installation.md"
+        c for c in stored if c.source_file == "en/docs/guide/installation.md"
     )
     table_block = "\n".join(
         [
@@ -503,3 +514,61 @@ def test_retrieval_roundtrip_uses_stored_vector_shape() -> None:
     )
     assert result.results
     assert all(-1.0 <= r.score <= 1.0 + 1e-6 for r in result.results)
+
+
+# ---------------------------------------------------------------------------
+# Test F — retrieval language filter (English default policy)
+# ---------------------------------------------------------------------------
+
+
+def test_ask_language_filter_restricts_and_any_disables() -> None:
+    """``language="en"`` excludes non-English chunks; ``"any"`` returns all.
+
+    Builds a fresh store from the EN fixtures plus one German document so the
+    shared ``FIXTURE_DOCS`` list is untouched for the other tests.
+    """
+    docs = FIXTURE_DOCS + [
+        Document(
+            file_path="de/docs/tutorial/first-steps.md",
+            content=(
+                "# Erste Schritte\n"
+                "\n"
+                "Erstellen Sie eine Datei namens `main.py` und definieren Sie "
+                "eine FastAPI-Anwendung mit `app = FastAPI()`.\n"
+            ),
+        )
+    ]
+    chunker = MarkdownChunker()
+    all_chunks: list[Chunk] = []
+    for doc in docs:
+        all_chunks.extend(chunker.chunk(doc))
+    embedder = FakeEmbeddingProvider()
+    store = InMemoryVectorStore()
+    store.add(all_chunks, embedder.embed([c.content for c in all_chunks]))
+    retriever = SimpleRetriever(embedder, store)
+    generator = FakeGenerator("FastAPI liefert passende Antworten. [1]")
+
+    # Explicit "en" (the defaults tests must not rely on the user's .env).
+    result_en = ask(
+        "How do I install FastAPI?",
+        retriever=retriever,
+        generator=generator,
+        citation_engine=StandardCitationEngine(),
+        language="en",
+        top_k=20,
+    )
+    assert result_en.results
+    assert all(r.chunk.source_file.startswith("en/") for r in result_en.results)
+
+    # "any" disables the filter → both en/ and de/ chunks come back.
+    result_any = ask(
+        "How do I install FastAPI?",
+        retriever=retriever,
+        generator=generator,
+        citation_engine=StandardCitationEngine(),
+        language="any",
+        top_k=20,
+    )
+    source_files = [r.chunk.source_file for r in result_any.results]
+    assert any(f.startswith("en/") for f in source_files)
+    assert any(f.startswith("de/") for f in source_files)

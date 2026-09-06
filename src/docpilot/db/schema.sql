@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     heading_path  TEXT,
     source_file   TEXT NOT NULL,
     chunk_index   INT NOT NULL,
+    language      TEXT NOT NULL DEFAULT 'en',  -- derived from source_file by pipeline/backfill
     metadata      JSONB DEFAULT '{}',
     embedding     vector(384) NOT NULL,
     created_at    TIMESTAMPTZ DEFAULT now()

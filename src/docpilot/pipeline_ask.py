@@ -119,6 +119,7 @@ def ask(
     generator=None,
     citation_engine=None,
     top_k: int | None = None,
+    language: str | None = None,
 ) -> AskResult:
     """Retrieve context for *question*, generate a cited answer and return it.
 
@@ -131,6 +132,9 @@ def ask(
             (default: ``StandardCitationEngine``).
         top_k: Number of chunks to retrieve; defaults to
             ``config.RETRIEVAL_TOP_K``.
+        language: Retrieval language filter; defaults to
+            ``config.RETRIEVAL_LANGUAGE``. The literal ``"any"`` disables
+            filtering (retrieval across all languages).
 
     Returns:
         An :class:`AskResult` carrying the answer, footer, sources and raw
@@ -147,6 +151,12 @@ def ask(
         citation_engine = StandardCitationEngine()
     top_k = top_k if top_k is not None else config.RETRIEVAL_TOP_K
 
+    # Language policy: explicit arg wins, else the config default; the
+    # literal "any" means no filter at the retrieval layer.
+    resolved_language = language if language is not None else config.RETRIEVAL_LANGUAGE
+    filter_language = None if resolved_language == "any" else resolved_language
+    logger.debug("Retrieval language filter: %s", filter_language)
+
     started = time.perf_counter()
     try:
         dim = _embedding_dimension(retriever)
@@ -156,7 +166,7 @@ def ask(
         )
 
         # ── retrieve ───────────────────────────────────────────────────────
-        results = retriever.retrieve(question, top_k=top_k)
+        results = retriever.retrieve(question, top_k=top_k, language=filter_language)
         for i, r in enumerate(results):
             logger.debug(
                 "Retrieved chunk %d: id=%s score=%.4f file=%s heading=%s",

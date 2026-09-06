@@ -44,3 +44,4 @@ CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "75"))
 
 # --- Retrieval ---
 RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "5"))
+RETRIEVAL_LANGUAGE: str = os.getenv("RETRIEVAL_LANGUAGE", "en")

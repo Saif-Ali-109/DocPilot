@@ -4,7 +4,7 @@ from typing import Sequence
 
 import numpy as np
 
-from docpilot.core.models import Chunk, RetrieverResult
+from docpilot.core.models import Chunk, RetrieverResult, source_language
 
 
 class VectorStore(ABC):
@@ -16,8 +16,18 @@ class VectorStore(ABC):
         ...
 
     @abstractmethod
-    def search(self, query_embedding: np.ndarray, top_k: int) -> list[RetrieverResult]:
-        """Return the top_k nearest neighbors by cosine similarity."""
+    def search(
+        self, query_embedding: np.ndarray, top_k: int, *, language: str | None = None
+    ) -> list[RetrieverResult]:
+        """Return the top_k nearest neighbors by cosine similarity.
+
+        Args:
+            query_embedding: The query vector.
+            top_k: Maximum results to return.
+            language: If set, restrict results to chunks whose source file
+                starts with this language tag (e.g. ``"en"``). ``None``
+                disables filtering.
+        """
         ...
 
     @abstractmethod
@@ -84,8 +94,9 @@ class PgVectorStore(VectorStore):
                 f"chunks ({len(chunks)}) and embeddings ({len(embeddings)}) must be the same length"
             )
         sql = """
-            INSERT INTO chunks (content, heading_path, source_file, chunk_index, metadata, embedding)
-            VALUES (%s, %s, %s, %s, %s::jsonb, %s)
+            INSERT INTO chunks (content, heading_path, source_file, chunk_index,
+                                language, metadata, embedding)
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
         """
         rows = []
         for chunk, emb in zip(chunks, embeddings):
@@ -97,6 +108,7 @@ class PgVectorStore(VectorStore):
                 chunk.heading_path,
                 chunk.source_file,
                 chunk.chunk_index,
+                source_language(chunk.source_file),
                 _json_dumps(meta),
                 emb.tolist(),
             ))
@@ -104,22 +116,42 @@ class PgVectorStore(VectorStore):
             cur.executemany(sql, rows)
         self._conn.commit()
 
-    def search(self, query_embedding: np.ndarray, top_k: int) -> list[RetrieverResult]:
+    def search(
+        self, query_embedding: np.ndarray, top_k: int, *, language: str | None = None
+    ) -> list[RetrieverResult]:
         """Return the *top_k* chunks most similar to *query_embedding*.
 
         Cosine distance is computed via pgvector's ``<=>`` operator.
         Similarity = 1 - distance.  Results are ordered DESC by similarity.
-        """
-        sql = """
-            SELECT content, heading_path, source_file, chunk_index, metadata,
-                   1.0 - (embedding <=> %s::vector) AS similarity
-            FROM chunks
-            ORDER BY embedding <=> %s::vector
-            LIMIT %s
+
+        Args:
+            query_embedding: The query vector.
+            top_k: Maximum results to return.
+            language: If set, restrict results to chunks whose ``language``
+                column matches this value. ``None`` disables filtering.
         """
         q = query_embedding.tolist()
+        if language is not None:
+            sql = """
+                SELECT content, heading_path, source_file, chunk_index, metadata,
+                       1.0 - (embedding <=> %s::vector) AS similarity
+                FROM chunks
+                WHERE language = %s
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s
+            """
+            params = (q, language, q, top_k)
+        else:
+            sql = """
+                SELECT content, heading_path, source_file, chunk_index, metadata,
+                       1.0 - (embedding <=> %s::vector) AS similarity
+                FROM chunks
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s
+            """
+            params = (q, q, top_k)
         with self._conn.cursor() as cur:
-            cur.execute(sql, (q, q, top_k))
+            cur.execute(sql, params)
             rows = cur.fetchall()
 
         results: list[RetrieverResult] = []

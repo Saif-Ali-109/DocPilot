@@ -3,7 +3,7 @@
 Usage::
 
     python -m docpilot ingest [--debug]
-    python -m docpilot ask "QUESTION" [--debug] [--json]
+    python -m docpilot ask "QUESTION" [--debug] [--json] [--lang LANGUAGE]
 
 Stream discipline:
     * **stdout** carries only program output — the answer (plain mode), the
@@ -97,6 +97,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit a JSON object {question, answer, sources} instead of plain text.",
     )
+    ask_p.add_argument(
+        "--lang",
+        default=None,
+        help="Retrieval language filter (default: RETRIEVAL_LANGUAGE env; 'any' = no filter).",
+    )
 
     return parser
 
@@ -140,7 +145,7 @@ def _run_ask(args: argparse.Namespace, injected: dict[str, Any]) -> int:
     from docpilot.pipeline_ask import ask
 
     kwargs = {k: injected[k] for k in _ASK_INJECTION_KEYS if k in injected}
-    result = ask(args.question, **kwargs)
+    result = ask(args.question, language=args.lang, **kwargs)
 
     if args.json:
         payload = {

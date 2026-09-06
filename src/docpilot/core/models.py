@@ -4,6 +4,18 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+def source_language(source_file: str) -> str:
+    """Derive the document language from a ``source_file`` path.
+
+    Corpus paths look like ``en/docs/...`` or ``zh-hant/docs/...`` where the
+    first path segment is the language tag. Paths without a language segment
+    (e.g. ``CORPUS.md`` at the corpus root) default to ``en``.
+    """
+    if "/" in source_file:
+        return source_file.split("/", 1)[0]
+    return "en"
+
+
 @dataclass
 class Document:
     """A raw documentation file (e.g. .md/.mdx) loaded from the corpus."""

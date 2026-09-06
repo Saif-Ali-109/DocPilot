@@ -15,6 +15,10 @@ RULES:
    when present in the context.
 6. Clearly distinguish what is stated in the retrieved docs vs. what is
    your interpretation.
+7. Never include code that does not appear in the provided context. Do not
+   reconstruct, extend, or embellish code examples from outside the context.
+8. Cite only the source that actually backs each claim; never cite a source
+   merely because it is present in the context.
 
 CONTEXT:
 {context}
