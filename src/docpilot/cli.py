@@ -4,6 +4,7 @@ Usage::
 
     python -m docpilot ingest [--debug]
     python -m docpilot ask "QUESTION" [--debug] [--json] [--lang LANGUAGE]
+                                     [--strategy auto|direct|agentic]
 
 Stream discipline:
     * **stdout** carries only program output — the answer (plain mode), the
@@ -48,7 +49,7 @@ _INGEST_INJECTION_KEYS = (
     "embedding_provider",
     "vector_store",
 )
-_ASK_INJECTION_KEYS = ("retriever", "generator", "citation_engine")
+_ASK_INJECTION_KEYS = ("retriever", "generator", "citation_engine", "judge")
 
 
 def _configure_logging(debug: bool) -> None:
@@ -102,6 +103,16 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Retrieval language filter (default: RETRIEVAL_LANGUAGE env; 'any' = no filter).",
     )
+    ask_p.add_argument(
+        "--strategy",
+        choices=["auto", "direct", "agentic"],
+        default=None,
+        help=(
+            "Routing strategy (default: AGENT_DEFAULT_STRATEGY env, i.e. 'auto'). "
+            "'direct' forces the Phase 1 fast path; 'agentic' forces the loop; "
+            "'auto' lets the heuristic gate decide."
+        ),
+    )
 
     return parser
 
@@ -142,10 +153,15 @@ def _run_ingest(args: argparse.Namespace, injected: dict[str, Any]) -> int:
 
 
 def _run_ask(args: argparse.Namespace, injected: dict[str, Any]) -> int:
-    from docpilot.pipeline_ask import ask
+    from docpilot import config
+    from docpilot.agent.graph import trace_step_to_dict
+    from docpilot.agent.pipeline_agentic import agentic_ask
 
     kwargs = {k: injected[k] for k in _ASK_INJECTION_KEYS if k in injected}
-    result = ask(args.question, language=args.lang, **kwargs)
+    strategy = args.strategy if args.strategy is not None else config.AGENT_DEFAULT_STRATEGY
+    result = agentic_ask(
+        args.question, strategy=strategy, language=args.lang, **kwargs
+    )
 
     if args.json:
         payload = {
@@ -155,11 +171,17 @@ def _run_ask(args: argparse.Namespace, injected: dict[str, Any]) -> int:
                 {"ref": s.ref, "file": s.file, "heading": s.heading}
                 for s in result.sources
             ],
+            # Additive Phase 2 keys — backward-compatible (SPEC §4.4, PLAN §3.3).
+            "strategy": strategy,
+            "direct": result.direct,
+            "refused": result.refused,
+            "trace": [trace_step_to_dict(t) for t in result.trace],
         }
         # Never include the raw prompt, raw response or any secrets in JSON.
         print(json.dumps(payload, ensure_ascii=False))
     else:
-        print(result.display)
+        # result.answer is already the full display string (answer + footer).
+        print(result.answer)
     return 0
 
 
@@ -171,8 +193,8 @@ def main(argv: list[str] | None = None, **injected: Any) -> int:
         **injected: Test-only seam. Keys matching pipeline parameters
             (``loader``, ``parser``, ``chunker``, ``embedding_provider``,
             ``vector_store`` for ``ingest``; ``retriever``, ``generator``,
-            ``citation_engine`` for ``ask``) are forwarded to the pipelines.
-            When absent, the real production defaults are built.
+            ``citation_engine``, ``judge`` for ``ask``) are forwarded to the
+            pipelines. When absent, the real production defaults are built.
 
     Returns:
         Exit code: ``0`` on success, ``1`` on runtime error. Argparse raises

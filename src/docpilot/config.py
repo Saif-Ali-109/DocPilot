@@ -45,3 +45,22 @@ CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "75"))
 # --- Retrieval ---
 RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "5"))
 RETRIEVAL_LANGUAGE: str = os.getenv("RETRIEVAL_LANGUAGE", "en")
+
+# --- Phase 2: Agentic retrieval (SPEC §4.3, PLAN §3.5) ---
+AGENT_MAX_RETRIES: int = int(os.getenv("AGENT_MAX_RETRIES", "2"))
+"""Maximum judge/reformulate iterations before the agent refuses (SPEC §4.1)."""
+
+AGENT_DEFAULT_STRATEGY: str = os.getenv("AGENT_DEFAULT_STRATEGY", "auto")
+"""Default ``ask --strategy`` when the flag is not given (``auto|direct|agentic``)."""
+
+AGENT_JUDGE_MODEL: str = os.getenv("AGENT_JUDGE_MODEL", "")
+"""Optional separate Groq model for the judge; empty string → ``GROQ_MODEL``."""
+
+AGENT_GATE_LONG_THRESHOLD: int = int(os.getenv("AGENT_GATE_LONG_THRESHOLD", "18"))
+"""Word-count gate trigger.
+
+NOT YET WIRED — wired in coordinator pass. ``HeuristicQueryClassifier``
+(agent/gate.py) currently uses the fixed module constant ``SIMPLE_WORD_LIMIT``
+and does not expose a constructor/parameter knob, so this key is defined here
+for forward-compatibility but is not consumed anywhere yet. Do NOT edit gate.py.
+"""

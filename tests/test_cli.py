@@ -73,7 +73,9 @@ def test_ask_json_output_is_clean_and_parseable(capsys) -> None:
 
     assert code == 0
     payload = json.loads(captured.out)  # raises if any log leaked to stdout
-    assert set(payload) == {"question", "answer", "sources"}
+    # Phase 1 keys are preserved (Phase 2 adds ``strategy``/``trace``/
+    # ``direct``/``refused`` — additive only, never replacing).
+    assert {"question", "answer", "sources"} <= set(payload)
 
     assert payload["question"] == QUESTION
     assert "pip install" in payload["answer"]
