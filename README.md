@@ -21,7 +21,7 @@ DocPilot ingests Markdown/MDX documentation (code blocks, nested headings, cross
 uv sync            # install dependencies into .venv
 ```
 
-Create a `.env` file with the keys listed in **SPEC.md §3.16** (`GROQ_API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, etc.). There is intentionally no `.env.example` — keys are documented in the spec only.
+Create a `.env` file from the template: `cp .env.example .env`, then fill in the required values (`GROQ_API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` — and optionally `GITHUB_PAT` to enable the Phase 3 GitHub tool). Keys are listed in **SPEC.md §3.16**.
 
 ## Usage
 

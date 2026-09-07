@@ -198,7 +198,7 @@
     under docs/ with CORPUS.md recording repo + commit hash.
 - guards:
   - pyproject/uv.lock write-only by A; others must not touch.
-  - .env keys per SPEC §3.16 (no .env.example).
+  - .env keys per SPEC §3.16; template ships as `.env.example`.
   - config.py reads all .env keys; survives missing optional keys with clear errors.
 
 ### deps.md

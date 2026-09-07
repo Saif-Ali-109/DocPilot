@@ -329,6 +329,10 @@ docpilot/
 
 ### 3.16 `.env` Keys
 
+A full template ships at the repo root as `.env.example` — copy it to `.env`
+(`cp .env.example .env`) and fill in the values. `.env` is git-ignored; never
+commit secrets. Every key:
+
 ```
 GROQ_API_KEY=
 GROQ_MODEL=openai/gpt-oss-20b
@@ -343,9 +347,19 @@ CHUNK_SIZE_TARGET=650
 CHUNK_OVERLAP=75
 RETRIEVAL_TOP_K=5
 RETRIEVAL_LANGUAGE=en
+AGENT_MAX_RETRIES=2
+AGENT_LOOP_TOP_K=8
+AGENT_DEFAULT_STRATEGY=auto
+AGENT_JUDGE_MODEL=
+GITHUB_PAT=
+GITHUB_API_BASE=https://api.github.com
+GITHUB_OWNER=fastapi
+GITHUB_REPO=fastapi
 ```
 
-No `.env.example` file — document keys in SPEC.md and README only.
+`GITHUB_OWNER`/`GITHUB_REPO` are the default repository the GitHub tool
+queries when a request doesn't name one (code default: empty — the tool
+request must then carry `owner`/`repo`).
 
 ### 3.17 Test Strategy (Phase 1)
 
