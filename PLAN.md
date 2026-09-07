@@ -7,11 +7,11 @@
     nested headings) and answers questions using retrieved evidence — but instead
     of naive retrieve-and-answer, it evaluates whether its own evidence is
     sufficient, retries searches when it isn't, reaches for live GitHub data via
-    MCP when static docs can't answer, and says "I don't know" rather than
-    hallucinating. Citations and retrieval/tool decisions are exposed throughout
-    for debugging and demonstration.
+    a plain REST tool (no MCP — SPEC §5) when static docs can't answer, and says
+    "I don't know" rather than hallucinating. Citations and retrieval/tool
+    decisions are exposed throughout for debugging and demonstration.
 - governing_rule: >
-    Reliable RAG → Agentic retrieval → MCP tools → Evaluation → API/UI →
+    Reliable RAG → Agentic retrieval → GitHub tooling → Evaluation → API/UI →
     optional code validation → extract reusable framework components.
     Do not skip ahead. Do not let later phases' ambitions leak into earlier
     phases' scope.
@@ -471,14 +471,69 @@ is plain-serialisable.
 
 Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
 
-## 4. phase_3: "MCP / GitHub Tooling"
-- status: PLANNED
+## 4. phase_3: "GitHub Tooling" — implemented 2026-09-07 (live QA + tag pending)
+- status: IN PROGRESS — implementation complete; hermetic suite green
+  (230 passed); live GitHub QA blocked on `GITHUB_PAT` in `.env`; no `phase-3`
+  tag until the QA passes (SPEC §5.5).
+- name_note: >
+    Originally "MCP / GitHub Tooling". Locked decision (2026-09-07): plain
+    GitHub REST behind the `Tool` interface — NO MCP protocol/SDK (SPEC §5.1).
 - summary: >
-    One meaningful MCP integration (GitHub) reached only when static docs are
-    demonstrably insufficient (e.g. live issues, repo state, recent PRs).
+    One meaningful external-data tool — GitHub — reached only when static docs
+    are demonstrably insufficient (live issue state, repo state, recent
+    commits). The judge's existing structured output carries the tool decision
+    (`needs_tool` + `tool_request`) — no extra LLM call.
 - guardrail: >
-    MCP solves a real problem (docs can't answer this), not a checkbox. If no
-    natural example exists where it's needed, don't wire it in.
+    The tool solves a real problem (docs can't answer this), not a checkbox.
+    A `needs_tool` request reaches GitHub only within budget; without a wired
+    tool the loop stays byte-identical Phase 2.
+
+### 4.1 locked_decisions (user sign-off 2026-09-07)
+1. Plain GitHub REST behind `Tool` — NO MCP protocol/SDK.
+2. Tool decision rides the judge's structured output; never a separate LLM call.
+3. `needs_tool` only with verdict insufficient + only for live-state gaps; doc
+   gaps retry retrieval (`reformulated_query`) instead; `needs_tool=true` ⇒
+   `reformulated_query=null`.
+4. One `tool_call` per question, within budget (budget trumps the tool on the
+   last round); tool never loops back to the judge; success → answer, failure →
+   verbatim §3.9 refusal.
+5. No PAT ⇒ judge told `TOOLS AVAILABLE: no`; loop Phase 2-identical; a
+   defensive `needs_tool` degrades to plain insufficient.
+6. Tool evidence cited: `LIVE GITHUB EVIDENCE` `[k+1…]` context section +
+   continuing `SourceRef`s (`github:{owner}/{repo}#{n}` / `@{sha}`) in the footer.
+
+### 4.2 files_owned
+- AGENT T1 (tools, commit 2c16c7f): `src/docpilot/tools/{__init__,base,github}.py`,
+  `tests/test_tools_github.py`, `config.py` GITHUB_* keys.
+- AGENT T2 (wiring, commit 1149087): `agent/{types,judge,prompts,graph,
+  pipeline_agentic}.py`, `cli.py` injection seam + "tool", agent tests.
+- Config: `GITHUB_PAT` / `GITHUB_API_BASE` / `GITHUB_OWNER` / `GITHUB_REPO`
+  (SPEC §5.3). `.env.example` + SPEC §3.16 / README / PLAN env refs (commit 85c0fb9).
+
+### 4.3 test_strategy
+- Hermetic: tools (injected `request_fn`, zero network), graph routing (StubTool;
+  budget-vs-tool ordering; tool failure → refuse; no-tool degradation), judge
+  `needs_tool`/`tool_request` tolerant parsing, pipeline tool injection,
+  guardrail assertions (no `tool_call` step on doc-answerable questions).
+- Live GitHub QA pending PAT — checklist in §4.5.
+
+### 4.4 exit_criteria (SPEC §5.5)
+- [x] `Tool` + `GitHubTool` (no MCP), PAT-gated
+- [x] Judge `needs_tool` signal, no extra LLM call
+- [x] `tool_call` node: within budget, never loops back; error → verbatim refuse
+- [x] No-PAT → Phase 2-identical loop
+- [x] Tool evidence cited (context + footer)
+- [x] Suite 230 passed (227 hermetic + 3 live)
+- [ ] Live QA (fastapi/fastapi): tool-fires (issues + commits), tempt-the-tool
+      guardrail, refusal regression — blocked on `GITHUB_PAT`
+- [ ] `phase-3` tag + native `GitHubTool` demo only after live QA passes
+
+### 4.5 verification (partial — implementation evidence only)
+- 230 tests green; Phase 1/2 regression protected (direct fast path untouched,
+  `tool=None` loop byte-identical).
+- Measurement status: judge `needs_tool` accuracy and tool-trigger necessity on
+  real GitHub are UNMEASURED until the live QA runs — held as unknowns, not
+  progress claims (client-review standard).
 
 ## 5. phase_4: "Evaluation"
 - status: PLANNED

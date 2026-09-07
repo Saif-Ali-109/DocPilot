@@ -4,13 +4,14 @@ An evidence-driven agentic RAG system for technical documentation.
 
 DocPilot ingests Markdown/MDX documentation (code blocks, nested headings, cross-references) and answers questions using retrieved evidence. Rather than naive retrieve-and-answer, it evaluates whether its evidence is sufficient, retries searches when it isn't, and says **"I don't know"** rather than hallucinating. Every retrieval and tool decision is loggable and inspectable.
 
-> **Status:** Phases 1–2 complete (Classic RAG + Agentic Retrieval). Phase 3 (MCP/GitHub) in progress. See [PLAN.md](PLAN.md) for the build plan and [SPEC.md](SPEC.md) for the authoritative specification.
+> **Status:** Phases 1–2 complete (Classic RAG + Agentic Retrieval). Phase 3 (GitHub tooling) implemented — live end-to-end QA pending (needs `GITHUB_PAT` in `.env`). See [PLAN.md](PLAN.md) for the build plan and [SPEC.md](SPEC.md) for the authoritative specification.
 
-## Current scope (Phases 1–2)
+## Current scope (Phases 1–3)
 
 - Ingestion: FastAPI docs corpus → Markdown-aware semantic chunking → BGE-small embeddings → pgvector
 - Retrieval: exact cosine search (top-k), language-filtered (English default; `--lang <tag>`, `any` disables)
 - Agentic retrieval: a heuristic gate routes multi-hop questions through a LangGraph loop — retrieve → sufficiency judge → reformulate/retry (max 2 retries → honest refusal). Simple questions keep the classic fast path
+- GitHub tool (Phase 3): judge-gated — the loop reaches GitHub (live issues, repo commits) via a plain REST `Tool` only when static docs are demonstrably insufficient; each call is traced and cited (`github:#issue` / `@commit`)
 - Generation: Groq `openai/gpt-oss-20b`, temperature 0, retry/backoff
 - Output: cited answers with inline `[1]` source markers + footer; per-step agent trace in `--debug` / `--json`
 - CLI: `python -m docpilot ingest [--debug]` · `python -m docpilot ask "..." [--debug] [--json] [--strategy auto|direct|agentic] [--lang <tag>]`
@@ -41,7 +42,7 @@ python -m docpilot ask --lang ja "..."                                          
 |-------|--------|
 | 1. Classic RAG | ✅ Complete |
 | 2. Agentic retrieval | ✅ Complete |
-| 3. MCP / GitHub tooling | 🚧 In progress (current) |
+| 3. GitHub tooling (plain REST, no MCP) | 🚧 Implemented — live QA pending |
 | 4. Evaluation | Planned |
 | 5. API + UI | Planned |
 | 6. Code generation/validation | Planned |

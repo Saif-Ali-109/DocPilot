@@ -13,7 +13,7 @@
 Key behaviours:
 - Judges whether retrieved evidence is sufficient to answer a question.
 - Retries and reformulates searches when evidence is insufficient (Phase 2+).
-- Calls out to GitHub via MCP when static docs can't answer (Phase 3+).
+- Calls out to GitHub — a plain REST tool behind the `Tool` interface, no MCP (Phase 3+) — when static docs can't answer.
 - Returns "I don't know" rather than hallucinating.
 - Every retrieval and tool decision is loggable and inspectable.
 
@@ -24,7 +24,7 @@ Key behaviours:
 ## 2. Phased Build Order
 
 ```
-Phase 1: Classic RAG → Phase 2: Agentic retrieval → Phase 3: MCP tools →
+Phase 1: Classic RAG → Phase 2: Agentic retrieval → Phase 3: GitHub tooling →
 Phase 4: Evaluation → Phase 5: API/UI → Phase 6: Code gen/validation →
 Extract reusable framework
 ```
@@ -282,6 +282,8 @@ All components are behind interfaces (abstract base classes or protocols). Even 
 
 **Phase 2 update (2026-09-06):** `Agent` is implemented — `AgenticAgent` (LangGraph loop) behind `Agent(ABC)` with `agentic_ask()` (§4); `QueryClassifier` (`HeuristicQueryClassifier`) and `SufficiencyJudge` (`LLMSufficiencyJudge`) were introduced in Phase 2 and are not part of the Phase 1 table above. `Tool` becomes Phase 3; `Reranker` and `Evaluator` are Phase 4. The table above is the Phase 1 snapshot.
 
+**Phase 3 update (2026-09-07):** `Tool` is implemented — `ToolRequest`/`ToolResult` + `Tool(ABC)` with one implementation, `GitHubTool` over GitHub REST (no MCP — §5). The agentic loop gained the judge's structural `needs_tool`/`tool_request` signal and a `tool_call` graph node; tool evidence appears as a `LIVE GITHUB EVIDENCE:` context section with continuing footer sources. CLI surface is unchanged (no new flags). `Reranker` and `Evaluator` remain Phase 4. The table above is the Phase 1 snapshot.
+
 Do not hard-code `groq.chat(...)` or `qdrant_client.search(...)` calls through business logic — always go through the relevant interface.
 
 ### 3.15 Directory Layout (Phase 1)
@@ -506,17 +508,57 @@ inspectable; no improvement claim is made here.
 
 ---
 
-## 5. Phase 3 — MCP / GitHub Tooling (Outline)
+## 5. Phase 3 — GitHub Tooling — implemented 2026-09-07 (live QA pending)
 
-Add one meaningful MCP integration: GitHub.
-
-The agent reaches for GitHub only when static docs are demonstrably insufficient — e.g. live issues, repo state, recent PRs.
+Adds one meaningful external-data tool — GitHub — reached only when static docs are demonstrably insufficient (live issue state, repo state, recent commits). Originally labelled "MCP / GitHub Tooling"; the locked decision (user sign-off 2026-09-07) is a **plain GitHub REST tool behind the `Tool` interface — no MCP protocol or SDK**.
 
 **Example:**
 > "Does this repo currently have an issue related to OAuth token expiration?"
-> Doc search → insufficient → GitHub MCP tool → inspect issues → answer with evidence.
+> Doc search → insufficient → judge `needs_tool` → GitHub tool → inspect issues → answer with evidence.
 
-**Guardrail:** MCP solves a real problem (docs can't answer this), not a checkbox. If no natural example exists where it's needed, don't wire it in.
+**Guardrail:** the tool solves a real problem (docs can't answer this), not a checkbox. If no natural example exists where it's needed, it isn't wired in.
+
+### 5.1 Locked decisions (2026-09-07, user sign-off)
+
+- **No MCP.** Plain GitHub REST via `requests` (`Accept: application/vnd.github+json`, `Authorization: Bearer <GITHUB_PAT>`). The `Tool` interface keeps vendor action names namespaced (`github.search_issues`), so a second tool slots in without touching the agent.
+- **Tool interface:** `Tool(ABC)` + `ToolRequest(name, params)` + `ToolResult(ok, summary, source_label, items, error)`; implementations never raise — errors are non-`ok` results. One implementation: `GitHubTool` (`github.search_issues`, `github.list_issues`, `github.get_commits`).
+- **Tool decisions are free:** `needs_tool` + `tool_request` ride the judge's existing structured output — no separate LLM call decides tooling.
+- **Trigger contract:** `needs_tool=true` only with verdict `"insufficient"` and only for live-state gaps a GitHub call could answer (open issues, repo state, current commits). Doc-content gaps retry the retrievers (`reformulated_query`) instead; when `needs_tool=true`, `reformulated_query` must be null.
+- **Graph wiring:** one `tool_call` node per question, only within budget (`attempts < AGENT_MAX_RETRIES` — budget trumps the tool on the last round); the tool NEVER loops back to the judge. Success → answer with tool evidence; failure → verbatim §3.9 refusal.
+- **Availability gating:** with no tool (no `GITHUB_PAT`) the judge is told `TOOLS AVAILABLE: no` and the loop is byte-identical Phase 2; a defensive `needs_tool` degrades to plain insufficient — a tool that isn't wired is never called.
+- **Evidence & citations:** tool items become continuing `SourceRef`s (`github:{owner}/{repo}#{n}` / `@{sha}`) surfaced as a separated `LIVE GITHUB EVIDENCE:` context section numbered `[k+1]…` after the doc chunks; the citation footer lines up with the `[n]` markers.
+
+### 5.2 Components
+
+| Component | Responsibility | File |
+|---|---|---|
+| `Tool` (ABC), `ToolRequest`, `ToolResult` | vendor-free call-site interface; never raises | `tools/base.py` |
+| `GitHubTool` | `search_issues` / `list_issues` / `get_commits` over REST; repo-scoped `q`; per-item `source_label` | `tools/github.py` |
+| `Judgment.needs_tool` / `tool_request` | structural tool signal from the judge (tolerant parse) | `agent/types.py`, `agent/judge.py` |
+| `tool_call` graph node + routers | judge → tool_call (within budget) → answer \| refuse | `agent/graph.py` |
+| `agentic_ask` / `AgenticAgent` `tool` | default `GitHubTool()` when `config.GITHUB_PAT` is set | `agent/pipeline_agentic.py` |
+
+### 5.3 Config
+
+| Key | Default | Purpose |
+|---|---|---|
+| `GITHUB_PAT` | "" | GitHub token; empty → tool disabled, loop Phase 2-identical |
+| `GITHUB_API_BASE` | `https://api.github.com` | API base (also the hermetic-test seam) |
+| `GITHUB_OWNER` / `GITHUB_REPO` | "" | default repo when a tool request doesn't name one |
+
+### 5.4 Trace
+
+The judge step records `decision=insufficient/needs-tool` with the `tool_request` in `detail`; the `tool_call` step records decision `tool_call` or `tool_error`, the action, item count / error message and `latency_ms` (step label `"tool_call"` flows through `--json` like any other step). No secrets (never the PAT) in any trace or log output.
+
+### 5.5 Exit criteria (Phase 3)
+
+- [x] `Tool` interface + `GitHubTool` over GitHub REST (no MCP), gated by `GITHUB_PAT`.
+- [x] Judge emits structured `needs_tool` + `tool_request` (no extra LLM call); tolerant parsing with safe defaults.
+- [x] `tool_call` graph node: within budget, single call, never loops back; success → answer with evidence, failure → verbatim §3.9 refusal.
+- [x] No tool / no PAT → Phase 2-identical loop (judge told tools unavailable).
+- [x] Tool evidence cited: `LIVE GITHUB EVIDENCE` context section + continuing footer sources.
+- [x] Full suite 230 passed (227 hermetic + 3 live pgvector integration).
+- [ ] Live QA on the real GitHub API against `fastapi/fastapi`: tool-fires (issues + commits), tempt-the-tool guardrail (no `tool_call` on doc-answerable questions), refusal regression. **Blocked only on `GITHUB_PAT` in `.env`** — until it runs, live tool behavior (judge `needs_tool` accuracy, trigger necessity) is unmeasured and claimed nowhere.
 
 ---
 

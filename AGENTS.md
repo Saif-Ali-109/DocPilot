@@ -1,6 +1,6 @@
 ## Project
 
-**DocPilot** — an evidence-driven agentic RAG system for technical documentation. It ingests Markdown/MDX docs (code blocks, nested headings, cross-references) and answers questions using retrieved evidence. It is not a plain retrieve-and-answer chatbot: it judges whether its own evidence is sufficient, retries/reformulates searches when it isn't, calls out to GitHub via MCP when static docs can't answer a question (e.g. live issues/repo state), and returns "I don't know" rather than hallucinating. Every retrieval and tool decision must stay inspectable — this is also a demo/debugging project, not just a production pipeline.
+**DocPilot** — an evidence-driven agentic RAG system for technical documentation. It ingests Markdown/MDX docs (code blocks, nested headings, cross-references) and answers questions using retrieved evidence. It is not a plain retrieve-and-answer chatbot: it judges whether its own evidence is sufficient, retries/reformulates searches when it isn't, calls out to GitHub — a plain REST tool behind the `Tool` interface, no MCP protocol (SPEC §5) — when static docs can't answer a question (e.g. live issues/repo state), and returns "I don't know" rather than hallucinating. Every retrieval and tool decision must stay inspectable — this is also a demo/debugging project, not just a production pipeline.
 
 This is also the learning/validation project for a future reusable RAG framework — DocPilot comes first, the framework gets extracted from it later, not the other way around.
 
@@ -12,7 +12,7 @@ This is also the learning/validation project for a future reusable RAG framework
 
 ## Build order
 
-`Reliable classic RAG → Agentic retrieval → MCP tools → Evaluation → API/UI → optional code validation → extract reusable framework components`
+`Reliable classic RAG → Agentic retrieval → GitHub tooling → Evaluation → API/UI → optional code validation → extract reusable framework components`
 
 1. **Never implement a later phase's functionality to unblock an earlier phase.** If Phase 1 retrieval seems weak, fix retrieval — don't paper over it with an agentic loop or a tool call.
 2. **Never skip Phase 4 (Evaluation) to get to Phase 5 (API/UI) faster.** If asked to "just wire up the UI first," build it against the current phase's output but say explicitly that evaluation is still owed before the project can claim the agentic layer is worth its cost.
@@ -23,7 +23,7 @@ This is also the learning/validation project for a future reusable RAG framework
 
 - **Phase 1 (Classic RAG):** ingestion → code-aware chunking (code blocks intact) → local embeddings (BGE-small) → vector DB (Qdrant/pgvector) → retrieval → LLM (Groq) → cited answer. A debug view shows retrieved chunks and scores. This is measurable on its own before any agent logic touches it.
 - **Phase 2 (Agentic retrieval):** LangGraph loop that can analyze → search → judge evidence sufficiency → reformulate/retry → answer or refuse. Simple questions must still route through the fast/cheap path — agentic looping is conditional, never mandatory for every query. If you find yourself routing everything through the agent, stop and flag it.
-- **Phase 3 (MCP/GitHub):** the agent reaches for GitHub only when static docs are demonstrably insufficient for the question. If you can't construct a real example where this is true, don't wire in the tool call for its own sake.
+- **Phase 3 (GitHub tooling):** a plain GitHub REST tool behind the `Tool` interface — no MCP protocol/SDK (SPEC §5.1). The agent reaches for GitHub only when static docs are demonstrably insufficient for the question (live issue state, repo state, recent commits). If you can't construct a real example where this is true, don't wire in the tool call for its own sake.
 - **Phase 4 (Evaluation):** a benchmark dataset and tracked metrics exist — retrieval quality, answer correctness, citation correctness, groundedness/hallucination rate, "I don't know" accuracy, latency, retrieval/tool call count — with a classic-RAG-vs-agentic-RAG comparison. Claims of improvement must be backed by this, not asserted.
 - **Phase 5 (API/UI):** FastAPI backend, streaming responses, citations and a retrieved-context debug panel surfaced in the UI, basic session/chat history. Chainlit first (per SPEC §7); React/Next.js only if there's slack in the schedule. Frontend work never delays or reshapes the RAG/agent core.
 - **Phase 6 (Code gen/validation):** documentation retrieval → generate code → validate against retrieved API/schema/examples → return code + sources. Only after Phase 1–5 are solid.
