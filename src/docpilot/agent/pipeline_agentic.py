@@ -34,6 +34,7 @@ from docpilot.agent.judge import LLMSufficiencyJudge
 from docpilot.agent.types import DEFAULT_MAX_RETRIES, AgentLoopState, LoopTraceStep
 from docpilot.citations.engine import StandardCitationEngine
 from docpilot.generation.generator import GroqGenerator
+from docpilot.tools import GitHubTool
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ def agentic_ask(
     top_k: int | None = None,
     language: str | None = None,
     max_retries: int | None = None,
+    tool=None,
 ) -> AgentResult:
     """Answer *question* under the chosen strategy.
 
@@ -86,6 +88,11 @@ def agentic_ask(
             ``config.RETRIEVAL_LANGUAGE``; ``"any"`` disables filtering.
         max_retries: Hard judge budget; defaults to ``config.AGENT_MAX_RETRIES``
             (falling back to ``agent.types.DEFAULT_MAX_RETRIES``).
+        tool: Phase 3 external-data ``Tool`` (e.g. ``GitHubTool``). When
+            ``None``, defaults to a production ``GitHubTool()`` if
+            ``config.GITHUB_PAT`` is truthy, else ``None`` — with no PAT the
+            graph is exactly Phase 2 (judge told tools are unavailable, no
+            tool node exists).
 
     Returns:
         An :class:`AgentResult` whose ``answer`` is the final display string
@@ -168,6 +175,11 @@ def agentic_ask(
         citation_engine = StandardCitationEngine()
     if judge is None:
         judge = _build_default_judge()
+    # Phase 3: default to the production GitHub tool only when a PAT exists;
+    # otherwise keep tool=None so the loop is byte-identical to Phase 2 (the
+    # judge is told tools are unavailable and no tool node exists).
+    if tool is None and config.GITHUB_PAT:
+        tool = GitHubTool()
 
     gate_step = LoopTraceStep.new(
         "gate", question, gate_decision, detail=gate_detail, started_at=gate_started
@@ -180,6 +192,7 @@ def agentic_ask(
         top_k=loop_top_k,
         language=None if resolved_language == "any" else resolved_language,
         max_retries=max_retries,
+        tool=tool,
     )
     initial: AgentLoopState = {
         "question": question,
@@ -189,6 +202,9 @@ def agentic_ask(
         "sources": [],
         "attempts": 0,
         "trace": [trace_step_to_dict(gate_step)],
+        "tool_request": None,
+        "tool_results": [],
+        "tool_error": None,
         "answer": None,
         "refused": False,
         "direct": False,
@@ -230,6 +246,7 @@ class AgenticAgent(Agent):
         top_k: int | None = None,
         language: str | None = None,
         max_retries: int | None = None,
+        tool=None,
     ) -> None:
         self._retriever = retriever
         self._generator = generator
@@ -239,13 +256,14 @@ class AgenticAgent(Agent):
         self._top_k = top_k
         self._language = language
         self._max_retries = max_retries
+        self._tool = tool
 
     def run(self, question: str, **kwargs) -> AgentResult:
         """Answer *question*, honouring per-call overrides in **kwargs.
 
         Recognised override keys: ``retriever``, ``generator``, ``judge``,
         ``citation_engine``, ``strategy``, ``top_k``, ``language``,
-        ``max_retries``.
+        ``max_retries``, ``tool``.
         """
         params = {
             "retriever": kwargs.get("retriever", self._retriever),
@@ -256,5 +274,6 @@ class AgenticAgent(Agent):
             "top_k": kwargs.get("top_k", self._top_k),
             "language": kwargs.get("language", self._language),
             "max_retries": kwargs.get("max_retries", self._max_retries),
+            "tool": kwargs.get("tool", self._tool),
         }
         return agentic_ask(question, **params)

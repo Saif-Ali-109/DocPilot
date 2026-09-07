@@ -40,6 +40,8 @@ You MUST output ONLY a single JSON object with exactly these keys:
   "reformulated_query" — a rewritten retrieval query that would help find the
                          missing evidence, or null if the current query is fine
                          or the verdict is sufficient.
+  "needs_tool"         — true or false (see the tool rules below)
+  "tool_request"       — null, or {"name": <github action>, "params": {...}}
 
 Rules:
 - Mark "sufficient" when the provided chunks, taken together, can support
@@ -55,6 +57,22 @@ Rules:
   still applies its own honesty gate and can refuse if the evidence is weak.
 - The reformulated_query (when present) MUST be in the same language as the
   question.
+
+Tool rules (Phase 3 — live GitHub evidence):
+- Set "needs_tool" true ONLY together with verdict "insufficient", and ONLY
+  when a live GitHub call could genuinely provide evidence the static docs
+  cannot — live issue state, repository state, or recent/current commits.
+  NEVER set it for plain documentation-content questions.
+- When a documentation retry could plausibly help, prefer setting
+  "reformulated_query" and leave "needs_tool" false.  The tool is the last
+  resort, used solely for evidence the docs corpus cannot hold.
+- When "needs_tool" is true, "reformulated_query" MUST be null, and
+  "tool_request" MUST be exactly one of:
+      {"name": "github.search_issues", "params": {"query": "<terms>"}}
+      {"name": "github.list_issues",   "params": {"state": "open", ...}}
+      {"name": "github.get_commits",   "params": {"ref": "<branch>", ...}}
+  Choose the action + params that target the missing live evidence.
+- When "needs_tool" is false, "tool_request" MUST be null.
 - Output ONLY the JSON object.  No markdown fences, no explanation before
   or after the JSON.
 """
@@ -72,6 +90,8 @@ def build_judge_user_prompt(
     question: str,
     query_used: str,
     results: list[RetrieverResult],
+    *,
+    tools_available: bool = True,
 ) -> str:
     """Build the user-facing prompt for the sufficiency judge.
 
@@ -79,6 +99,10 @@ def build_judge_user_prompt(
         question: The original user question.
         query_used: The retrieval query that produced *results*.
         results: The retriever results to evaluate.
+        tools_available: Whether a Phase 3 external tool (GitHub) is wired
+            into the graph.  ``False`` instructs the judge that ``needs_tool``
+            must stay false so the loop can never ask for a tool that does not
+            exist.
 
     Returns:
         A formatted prompt string ready to be passed to
@@ -91,6 +115,13 @@ def build_judge_user_prompt(
     lines.append("")
     lines.append("QUERY USED FOR RETRIEVAL:")
     lines.append(query_used)
+    lines.append("")
+    lines.append(f"TOOLS AVAILABLE: {'yes' if tools_available else 'no'}")
+    if not tools_available:
+        lines.append(
+            'No external tools are available — "needs_tool" MUST be false '
+            "and \"tool_request\" MUST be null."
+        )
     lines.append("")
     lines.append("RETRIEVED CHUNKS:")
     lines.append("")

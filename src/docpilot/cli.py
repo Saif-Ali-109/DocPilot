@@ -49,7 +49,7 @@ _INGEST_INJECTION_KEYS = (
     "embedding_provider",
     "vector_store",
 )
-_ASK_INJECTION_KEYS = ("retriever", "generator", "citation_engine", "judge")
+_ASK_INJECTION_KEYS = ("retriever", "generator", "citation_engine", "judge", "tool")
 
 
 def _configure_logging(debug: bool) -> None:
@@ -193,8 +193,9 @@ def main(argv: list[str] | None = None, **injected: Any) -> int:
         **injected: Test-only seam. Keys matching pipeline parameters
             (``loader``, ``parser``, ``chunker``, ``embedding_provider``,
             ``vector_store`` for ``ingest``; ``retriever``, ``generator``,
-            ``citation_engine``, ``judge`` for ``ask``) are forwarded to the
-            pipelines. When absent, the real production defaults are built.
+            ``citation_engine``, ``judge``, ``tool`` for ``ask``) are
+            forwarded to the pipelines. When absent, the real production
+            defaults are built.
 
     Returns:
         Exit code: ``0`` on success, ``1`` on runtime error. Argparse raises

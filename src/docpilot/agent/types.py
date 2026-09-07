@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import TypedDict
 
 from docpilot.core.models import Chunk, RetrieverResult, SourceRef
+from docpilot.tools.base import ToolResult
 
 # ---------------------------------------------------------------------------
 # Budget constant (SPEC §4.1 — never hard-coded elsewhere)
@@ -59,11 +60,23 @@ class Judgment:
             evidence is insufficient and a retry is warranted.  ``None`` when
             the current query is already adequate (or when the verdict is
             sufficient).
+        needs_tool: ``True`` only when the verdict is ``"insufficient"`` and a
+            live external call (Phase 3, e.g. GitHub) could genuinely provide
+            evidence static docs cannot (live issue state, repo state, recent
+            commits).  Default ``False`` — doc-content gaps retry the
+            retrievers instead.
+        tool_request: The validated tool invocation
+            ``{"name": "<github action>", "params": {...}}`` the agent should
+            run when ``needs_tool`` fires; ``None`` otherwise.  Only meaningful
+            together with ``needs_tool=True``; the graph also refuses to fire
+            the tool when no tool is wired.
     """
 
     verdict: str
     reason: str
     reformulated_query: str | None = None
+    needs_tool: bool = False
+    tool_request: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -76,8 +89,8 @@ class LoopTraceStep:
     """One decision point in the agentic loop (Phase 2's only trace mechanism).
 
     Attributes:
-        step: One of ``"gate"``, ``"search"``, ``"judge"``, ``"answer"``,
-            ``"refuse"``.
+        step: One of ``"gate"``, ``"search"``, ``"judge"``, ``"tool_call"``,
+            ``"answer"``, ``"refuse"``.
         query: The query string used at this step.
         decision: Short label, e.g. ``"agentic"``, ``"direct"``,
             ``"sufficient"``, ``"insufficient/retry-1"``, ``"refuse"``.
@@ -149,6 +162,15 @@ class AgentLoopState(TypedDict, total=False):
             ``{ref, file, heading}``.
         attempts: How many judge calls have been made so far.
         trace: Serialised :class:`LoopTraceStep` list.
+        tool_request: Validated tool invocation ``{"name", "params"}`` stashed
+            by the judge node when ``needs_tool`` fired on a within-budget
+            round (``None`` otherwise — reset every round).
+        tool_results: Serialised :class:`ToolResult` list (``ok`` results from
+            the Phase 3 tool call, consumed by the answer node's
+            ``LIVE GITHUB EVIDENCE`` context section).
+        tool_error: Error message when the tool call failed (``ok=False``);
+            ``None`` when no tool ran or the tool succeeded — routes the graph
+            to ``refuse`` / ``answer`` respectively.
         answer: The final answer string (``None`` until the graph reaches
             the ``answer`` or ``refuse`` node).
         refused: ``True`` when the budget is exhausted and the agent says
@@ -164,6 +186,42 @@ class AgentLoopState(TypedDict, total=False):
     sources: list[dict]
     attempts: int
     trace: list[dict]
+    tool_request: dict | None
+    tool_results: list[dict]
+    tool_error: str | None
     answer: str | None
     refused: bool
     direct: bool
+
+
+# ---------------------------------------------------------------------------
+# Tool result serialisation (Phase 3 — graph state stores plain dicts)
+# ---------------------------------------------------------------------------
+
+
+def tool_result_to_dict(result: ToolResult) -> dict:
+    """Serialise a :class:`ToolResult` to a plain dict for graph state.
+
+    Fields needed downstream: ``ok`` / ``summary`` / ``error`` for routing and
+    the answer node's ``LIVE GITHUB EVIDENCE`` context section, plus the
+    per-item records (carrying the per-record ``source_label`` the tool_call
+    node turns into :class:`SourceRef` citation entries).
+    """
+    return {
+        "ok": result.ok,
+        "summary": result.summary,
+        "error": result.error,
+        "source_label": result.source_label,
+        "items": list(result.items),
+    }
+
+
+def dict_to_tool_result(d: dict) -> ToolResult:
+    """Rebuild a :class:`ToolResult` from a graph-state dict."""
+    return ToolResult(
+        ok=bool(d.get("ok", False)),
+        summary=d.get("summary", ""),
+        error=d.get("error"),
+        source_label=d.get("source_label"),
+        items=list(d.get("items") or []),
+    )

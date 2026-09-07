@@ -25,6 +25,7 @@ from docpilot.agent.types import Judgment
 from docpilot.citations.engine import StandardCitationEngine
 from docpilot.pipeline_ask import ask as pipeline_ask
 from docpilot.retrieval.retriever import SimpleRetriever
+from docpilot.tools import ToolResult
 
 from test_pipeline_e2e import (
     FIXTURE_DOCS,
@@ -32,7 +33,13 @@ from test_pipeline_e2e import (
     FakeGenerator,
     InMemoryVectorStore,
 )
-from test_agent_graph import FakeRetriever, StubJudge, make_result
+from test_agent_graph import (
+    FakeRetriever,
+    StubJudge,
+    StubTool,
+    github_issue_result,
+    make_result,
+)
 
 SIMPLE_Q = "How do I install FastAPI?"
 COMPLEX_Q = "Combine path, query, and body parameters in one endpoint — what are the validation rules for each kind?"
@@ -317,3 +324,149 @@ def test_cli_rejects_agentic_alias() -> None:
     with pytest.raises(SystemExit) as excinfo:
         cli.main(["ask", SIMPLE_Q, "--agentic"])
     assert excinfo.value.code == 2
+
+
+# ---------------------------------------------------------------------------
+# (g) Phase 3 — tool wiring through agentic_ask (SPEC §5)
+# ---------------------------------------------------------------------------
+
+
+def test_agentic_ask_with_tool_surfaces_github_evidence() -> None:
+    """Hermetic end-to-end: judge needs_tool → tool call → cited answer with
+    the tool's source in the footer."""
+    judge = StubJudge(
+        [
+            Judgment(
+                verdict="insufficient",
+                reason="live issue state needed",
+                needs_tool=True,
+                tool_request={
+                    "name": "github.search_issues",
+                    "params": {"query": "oauth token expiration"},
+                },
+            )
+        ]
+    )
+    tool = StubTool({"github.search_issues": github_issue_result()})
+    # The generator cites the tool source ([3] — after the two doc chunks).
+    gen = FakeGenerator("There is a live issue tracking this. [3]")
+
+    agent_res = agentic_ask(
+        COMPLEX_Q,
+        strategy="auto",
+        retriever=FakeRetriever(
+            {
+                COMPLEX_Q: [
+                    make_result(content="Path, query and body parameter validation rules.", score=0.9),
+                    make_result(content="Each parameter kind validates differently.", score=0.7),
+                ],
+            }
+        ),
+        judge=judge,
+        generator=gen,
+        citation_engine=StandardCitationEngine(),
+        tool=tool,
+    )
+
+    assert agent_res.direct is False
+    assert agent_res.refused is False
+    steps = [t.step for t in agent_res.trace]
+    assert steps == ["gate", "search", "judge", "tool_call", "answer"]
+    tool_step = next(t for t in agent_res.trace if t.step == "tool_call")
+    assert tool_step.decision == "tool_call"
+    assert tool_step.latency_ms is not None and tool_step.latency_ms >= 0
+
+    # The tool's per-item source_label is a citeable SourceRef.
+    github_refs = [s for s in agent_res.sources if s.file.startswith("github:")]
+    assert len(github_refs) == 1
+    assert github_refs[0].ref == 3
+    assert github_refs[0].file == "github:acme/widget#42"
+    assert github_refs[0].heading == "OAuth token expires"
+
+    # A single tool call with the judge's params went through the interface.
+    assert [c.name for c in tool.calls] == ["github.search_issues"]
+    assert tool.calls[0].params == {"query": "oauth token expiration"}
+
+    # The generator saw the live evidence section and the footer lines up.
+    assert gen.last_context is not None
+    assert "LIVE GITHUB EVIDENCE:" in gen.last_context
+    assert "[3] github:acme/widget#42 → OAuth token expires" in gen.last_sources
+    assert "[3] github:acme/widget#42 → OAuth token expires" in agent_res.answer
+
+
+def test_no_pat_means_no_tool_and_phase2_behavior(monkeypatch) -> None:
+    """GITHUB_PAT="" → agentic_ask(..., tool=None) keeps Phase 2 behaviour:
+    no tool node, no github sources, judge told tools are unavailable."""
+    monkeypatch.setattr(config, "GITHUB_PAT", "")
+    judge = StubJudge(
+        [
+            Judgment(
+                verdict="insufficient",
+                reason="would like live state but no tool is available",
+                needs_tool=True,
+                tool_request={"name": "github.search_issues", "params": {"query": "x"}},
+            )
+        ]
+    )
+    gen = FakeGenerator("Each parameter kind has its own validation rules. [1]")
+
+    agent_res = agentic_ask(
+        COMPLEX_Q,
+        strategy="auto",
+        retriever=FakeRetriever(
+            {
+                COMPLEX_Q: [
+                    make_result(content="Path, query and body parameter validation rules.", score=0.9),
+                    make_result(content="Each parameter kind validates differently.", score=0.7),
+                ],
+            }
+        ),
+        judge=judge,
+        generator=gen,
+        citation_engine=StandardCitationEngine(),
+    )
+
+    assert agent_res.direct is False
+    assert agent_res.refused is False
+    steps = [t.step for t in agent_res.trace]
+    # needs_tool degraded to plain insufficient → second search → sufficient.
+    assert steps == ["gate", "search", "judge", "search", "judge", "answer"]
+    assert "tool_call" not in steps
+    assert not any(s.file.startswith("github:") for s in agent_res.sources)
+    # The judge was told no tool is wired on every round.
+    assert judge.tools_seen == [False, False]
+
+
+def test_agentic_agent_accepts_tool_and_passes_it_through() -> None:
+    agent = AgenticAgent()
+    judge = StubJudge(
+        [
+            Judgment(
+                verdict="insufficient",
+                reason="live state needed",
+                needs_tool=True,
+                tool_request={"name": "github.search_issues", "params": {"query": "x"}},
+            )
+        ]
+    )
+    tool = StubTool({"github.search_issues": github_issue_result()})
+    gen = FakeGenerator("Live evidence [3]")
+    res = agent.run(
+        COMPLEX_Q,
+        strategy="agentic",
+        retriever=FakeRetriever(
+            {
+                COMPLEX_Q: [
+                    make_result(content="Docs chunk a.", score=0.9),
+                    make_result(content="Docs chunk b.", score=0.7),
+                ],
+            }
+        ),
+        judge=judge,
+        generator=gen,
+        citation_engine=StandardCitationEngine(),
+        tool=tool,
+    )
+
+    assert "tool_call" in [t.step for t in res.trace]
+    assert any(s.file.startswith("github:") for s in res.sources)
