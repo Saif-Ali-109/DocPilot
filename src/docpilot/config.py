@@ -70,3 +70,20 @@ NOT YET WIRED — wired in coordinator pass. ``HeuristicQueryClassifier``
 and does not expose a constructor/parameter knob, so this key is defined here
 for forward-compatibility but is not consumed anywhere yet. Do NOT edit gate.py.
 """
+
+# --- Phase 3: GitHub tool (SPEC §5, PLAN §4) ---
+GITHUB_PAT: str = os.getenv("GITHUB_PAT", "")
+"""GitHub Personal Access Token (optional — empty by default).
+
+An empty PAT disables the GitHub tool: it returns a non-``ok`` ToolResult and
+never makes an HTTP call (locked decision, PLAN §4).  Never log this value.
+"""
+
+GITHUB_API_BASE: str = os.getenv("GITHUB_API_BASE", "https://api.github.com")
+"""GitHub REST API base URL — defaults to the public ``api.github.com``."""
+
+GITHUB_OWNER: str = os.getenv("GITHUB_OWNER", "")
+"""Default repository owner for the GitHub tool (e.g. ``fastapi``)."""
+
+GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")
+"""Default repository name for the GitHub tool (e.g. ``fastapi``)."""
