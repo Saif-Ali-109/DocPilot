@@ -536,7 +536,7 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
   progress claims (client-review standard).
 
 ## 5. phase_4: "Evaluation"
-- status: PLANNED
+- status: PLANNED (scope locked 2026-09-07 — SPEC §6)
 - summary: >
     Build a benchmark dataset and track: retrieval quality, answer correctness,
     citation correctness, groundedness/hallucination rate, "I don't know"
@@ -544,6 +544,17 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
 - required_comparison: >
     Classic RAG (Phase 1) vs. agentic RAG (Phase 2) on the same benchmark.
     Claims of improvement must be backed by this data, not asserted.
+- client_required_scope: >
+    Locked 2026-09-07 (SPEC §6.2): false-refusal rate + 3-way decomposition
+    (retrieval / judge / routing); judge-specific calibration (labeled triples +
+    adversarial paraphrases + parse-failure rate); tool-necessity eval
+    (docs-answerable / live-state-answerable / neither → false pos/neg rates);
+    judge two-prompt A/B as the first slice.
+- known_open_questions: >
+    Phase 2 seeds 4/6 refusals may be false refusals (retrieval failed, judge
+    honest) — resolved via the decomposition eval, not ad hoc retries.
+    Parse-fallback default (sufficient) stays pending Phase 4 flip-condition
+    data (SPEC §6.3).
 
 ## 6. phase_5: "API + UI"
 - status: PLANNED

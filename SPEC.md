@@ -562,11 +562,14 @@ The judge step records `decision=insufficient/needs-tool` with the `tool_request
 
 ---
 
-## 6. Phase 4 — Evaluation (Outline)
+## 6. Phase 4 — Evaluation (scope locked 2026-09-07)
 
-Build a benchmark dataset and track metrics before polishing anything.
+Build a benchmark dataset and track metrics before polishing anything. Nothing
+is claimed about "agentic RAG being better" — or the Phase 3 tool being worth
+its cost — until this phase's measurements exist (§2 hard rules).
 
-**Metrics tracked:**
+### 6.1 Baseline metrics + required comparison
+
 - Retrieval quality (precision/recall of top-k)
 - Answer correctness
 - Citation correctness
@@ -575,7 +578,57 @@ Build a benchmark dataset and track metrics before polishing anything.
 - Latency
 - Number of retrieval/tool calls per query
 
-**Required comparison:** Classic RAG (Phase 1) vs. agentic RAG (Phase 2), on the same benchmark. Claims of improvement must be backed by this data.
+**Required comparison:** Classic RAG (Phase 1) vs. agentic RAG (Phase 2) on the
+same benchmark. Claims of improvement must be backed by this data, not asserted.
+
+### 6.2 Client-required evaluation scope (locked 2026-09-07, client review)
+
+- **False-refusal rate + 3-way decomposition.** Every refusal is classified as a
+  retrieval failure, a judge failure, or a routing failure (gate misroute).
+  Supersedes the Phase 2 "seed refusals are honest" verdict as a claim —
+  refusals count as honest only when the decomposition shows the evidence
+  genuinely was insufficient.
+- **Judge-specific calibration.** Labeled verdict triples (question, context,
+  gold verdict) + adversarial paraphrases + parse-failure rate
+  (empty / unparseable / bad-verdict judge outputs per question). Judge-only —
+  independent of retrieval and routing quality.
+- **Tool-necessity evaluation.** Gold-labeled tri-class questions:
+  docs-answerable / live-state-answerable / neither. Reports tool false-positive
+  rate (tool fired when docs alone could answer) and false-negative rate
+  (live-state question where the tool never triggered). This is Phase 3's
+  necessity measurement — SPEC §5.5 explicitly claims nothing about live tool
+  behavior until this runs.
+- **Judge two-prompt A/B (first evaluation slice).** The current single judge
+  prompt is pressure-tested against a second prompt variant on the same labeled
+  verdict triples; prompt changes are adopted on calibration data alone, never
+  on judgment. Also serves as the two-implementation pressure test for the
+  `SufficiencyJudge` interface.
+
+### 6.3 Known open questions feeding the eval set
+
+- Phase 2 seeds 4/6 "honest refusals" may be **false refusals** — the FastAPI
+  corpus likely contains retrieved evidence for `response_model=Item` with
+  `item: Item` (mixin-style body), meaning retrieval may have failed instead of
+  the judge judging honestly. Resolved by the 3-way decomposition eval, not by
+  re-running one question ad hoc.
+- The judge parse-fallback default stays `sufficient` (the generator's §3.9
+  honesty gate remains the final safety layer) **pending this evaluation**. Flip
+  conditions, shown only by Phase 4 data: a non-trivial live parse-fallback rate
+  (made measurable by the agreed judge fallback counter once Phase 4 monitoring
+  lands), or the generator under-refusing on weak evidence.
+
+### 6.4 Exit criteria (Phase 4)
+
+- [ ] Benchmark dataset committed: labeled verdict triples, adversarial
+      paraphrases, tool-necessity tri-class gold labels.
+- [ ] Classic-RAG vs. agentic-RAG comparison on all §6.1 metrics, one table.
+- [ ] False-refusal decomposition (retrieval / judge / routing) on the benchmark.
+- [ ] Judge calibration report: verdict accuracy, adversarial robustness,
+      parse-failure rate, and the two-prompt A/B result.
+- [ ] Tool-necessity report: false-positive / false-negative rates on the
+      tri-class set.
+- [ ] Parse-fallback flip-condition check run, with the keep-vs-flip decision
+      recorded.
 
 ---
 
