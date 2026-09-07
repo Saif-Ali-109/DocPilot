@@ -17,6 +17,7 @@ Covered routing / budget / node-level guarantees:
 
 from __future__ import annotations
 
+from docpilot import config
 from docpilot.agent.graph import build_graph, trace_step_to_dict
 from docpilot.agent.prompts import REFUSE_ANSWER
 from docpilot.agent.types import AgentLoopState, Judgment, LoopTraceStep
@@ -235,6 +236,27 @@ def test_budget_scale_with_three_retries() -> None:
 
     assert judge.calls == 3
     assert final["refused"] is True
+
+
+def test_build_graph_default_top_k_is_agent_loop_top_k() -> None:
+    # PLAN §3.7 fix: build_graph with no explicit top_k uses AGENT_LOOP_TOP_K
+    # (broader than the fast path's RETRIEVAL_TOP_K).
+    retriever = FakeRetriever(RESULTS_BY_QUERY)
+    judge = StubJudge([Judgment(verdict="sufficient", reason="covers it")])
+    gen = FakeGenerator("covered [1]")
+    app = build_graph(
+        retriever=retriever,
+        judge=judge,
+        generator=gen,
+        citation_engine=StandardCitationEngine(),
+        language=None,
+        max_retries=2,
+    )
+
+    final = app.invoke(initial_state())
+
+    assert final["refused"] is False
+    assert retriever.calls and retriever.calls[0][1] == config.AGENT_LOOP_TOP_K
 
 
 # ---------------------------------------------------------------------------

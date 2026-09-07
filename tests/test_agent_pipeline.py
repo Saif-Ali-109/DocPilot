@@ -19,7 +19,7 @@ import json
 
 import pytest
 
-from docpilot import cli
+from docpilot import cli, config
 from docpilot.agent.pipeline_agentic import AgenticAgent, agentic_ask
 from docpilot.agent.types import Judgment
 from docpilot.citations.engine import StandardCitationEngine
@@ -99,6 +99,47 @@ def test_auto_simple_is_direct_and_identical_to_phase1() -> None:
     assert [t.step for t in agent_res.trace] == ["gate"]
     assert agent_res.trace[0].decision == "direct"
     assert agent_res.refused is False
+
+
+# ---------------------------------------------------------------------------
+# top_k resolution: loop uses AGENT_LOOP_TOP_K, fast path keeps RETRIEVAL_TOP_K
+# ---------------------------------------------------------------------------
+
+
+def test_agentic_loop_retrieves_with_agent_loop_top_k_by_default() -> None:
+    # PLAN §3.7 fix: the loop retrieve (and therefore the judge's evidence)
+    # uses AGENT_LOOP_TOP_K (8) when the caller did not override top_k.
+    retriever, judge, gen = _agentic_fakes()
+    agent_res = agentic_ask(
+        COMPLEX_Q,
+        strategy="auto",
+        retriever=retriever,
+        judge=judge,
+        generator=gen,
+        citation_engine=StandardCitationEngine(),
+    )
+
+    assert agent_res.direct is False
+    assert retriever.calls, "retriever never invoked on the loop path"
+    assert retriever.calls[0][1] == config.AGENT_LOOP_TOP_K
+
+
+def test_direct_path_keeps_retrieval_top_k() -> None:
+    # PLAN §3.7 guard: the fast path must NOT inherit the loop's broader
+    # default — it stays at RETRIEVAL_TOP_K.
+    retriever = FakeRetriever({SIMPLE_Q: [make_result(score=0.85)]})
+    gen = FakeGenerator(CANNED)
+    agent_res = agentic_ask(
+        SIMPLE_Q,
+        strategy="auto",
+        retriever=retriever,
+        generator=gen,
+        citation_engine=StandardCitationEngine(),
+    )
+
+    assert agent_res.direct is True
+    assert retriever.calls, "retriever never invoked on the fast path"
+    assert retriever.calls[0][1] == config.RETRIEVAL_TOP_K
 
 
 # ---------------------------------------------------------------------------

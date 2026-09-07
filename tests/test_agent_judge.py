@@ -137,6 +137,19 @@ class TestLLMSufficiencyJudge:
         assert "0.8100" in stub.last_prompt
         assert "QUERY USED FOR RETRIEVAL" in stub.last_prompt
 
+    def test_judge_prompt_softening_phrases_present(self) -> None:
+        """PLAN §3.7 fix: the judge must not reject partial coverage — the
+        softening wording must be in the system prompt verbatim."""
+        assert (
+            "even if a specific detail is only partially covered" in JUDGE_SYSTEM_PROMPT
+        )
+        assert (
+            "Do not mark insufficient merely because a specific sentence is absent"
+            in JUDGE_SYSTEM_PROMPT
+        )
+        assert "no usable evidence to begin answering" in JUDGE_SYSTEM_PROMPT
+        assert "tutorial/xxx page" in JUDGE_SYSTEM_PROMPT
+
     def test_judge_rejects_networks_by_construction(self) -> None:
         # Constructing with a stub means no network can be touched.
         stub = StubGenerator('{"verdict": "sufficient", "reason": "ok",'

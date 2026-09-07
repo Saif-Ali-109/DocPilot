@@ -20,14 +20,21 @@ set — PLAN wins over the task's draft proposal where they conflict):
     3. **multi_part** — two or more ``"how do i"`` / ``"what is"`` /
        ``"how can i"`` conjuncts joined by ``and`` (e.g. *"How do I add a
        path parameter and what is a query parameter?"*).
-    4. **multi_tech_terms** — at least :data:`MIN_TECH_TERMS` (2) distinct
-       framework terms from :data:`TECH_TERMS` appear **alongside** another
+    4. **multi_concept** — STANDALONE trigger: at least
+       :data:`MIN_AGENTIC_CONCEPTS` (3) **distinct** framework concepts from
+       :data:`TECH_TERMS` are present (case-insensitive, word-boundary
+       matches).  Juxtaposing three or more concepts is a strong multi-hop
+       signal even without connector language — this routes the §3.8 seed
+       questions 3/7/8 ("…exception handlers/middleware?",
+       "WebSocket endpoint + HTTP route … auth dependency",
+       "OAuth2 security scopes + custom dependency … routes") agentically.
+    5. **multi_tech_terms** — corroborating ONLY: exactly two distinct
+       concepts (:data:`MIN_TECH_TERMS`) appear **alongside** another
        complexity signal.  Two terms alone usually form a single compound
-       concept ("query parameter"); juxtaposing several concepts is almost
-       always expressed through connecting language, so tech terms act as
-       corroborating evidence, not a standalone trigger.  This keeps the
-       §3.8 simple seed "What is a query parameter in FastAPI?" direct while
-       multi-hop questions (concepts + connectors) are routed agentically.
+       concept ("query parameter"), so they never stand alone — this keeps
+       the §3.8 simple seed "What is a query parameter in FastAPI?" direct.
+       (Concept counts at or above :data:`MIN_AGENTIC_CONCEPTS` fire signal 4
+       instead, so this corroborating signal never double-fires.)
 
 Aggregation: the question is **agentic when at least one signal fires**;
 empty or whitespace-only input returns ``agentic=False`` (never throws).
@@ -49,7 +56,12 @@ SIMPLE_WORD_LIMIT: int = 18
 
 MIN_TECH_TERMS: int = 2
 """Minimum distinct tech-term matches (alongside another signal) to fire the
-multi-tech-term signal."""
+corroborating multi-tech-term signal."""
+
+MIN_AGENTIC_CONCEPTS: int = 3
+"""Minimum DISTINCT matched concepts to fire the standalone multi_concept
+signal.  Three or more juxtaposed framework concepts is treated as a strong
+multi-hop indicator even without connector/reasoning language."""
 
 # Reasoning / comparison / joiner words that suggest the question compares,
 # combines or conditions over multiple things.  Question openers ("how do i",
@@ -97,6 +109,9 @@ TECH_TERMS: frozenset[str] = frozenset({
     "exception", "exception_handler",
     "annotated", "scope", "scopes",
     "openapi", "schema", "model",
+    # concepts added for the multi_concept standalone signal (PLAN §3.7 fix)
+    "endpoint", "route", "routes", "http", "auth", "authentication",
+    "handler", "task", "cleanup", "request",
 })
 
 # Regex for explicit multi-part questions:
@@ -109,6 +124,14 @@ _MULTI_PART_RE = re.compile(
 
 _OPENER_RE = re.compile(
     r"^(?:" + "|".join(_QUESTION_OPENERS) + r")\b",
+    re.IGNORECASE,
+)
+
+# Word-boundary compound alternation over TECH_TERMS — used to count DISTINCT
+# matched concepts.  ``findall`` returns the matched term strings (no
+# capturing group, so no group extraction is needed).
+_TECH_TERMS_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(t) for t in TECH_TERMS) + r")\b",
     re.IGNORECASE,
 )
 
@@ -169,10 +192,20 @@ class HeuristicQueryClassifier(QueryClassifier):
         if multi_part:
             signals.append("multi_part")
 
-        # 4. Multiple technical terms — corroborating evidence only
-        #    (requires another complexity signal to have fired).
-        tech_matches = sorted({t for t in TECH_TERMS if t in stripped})
-        if len(tech_matches) >= MIN_TECH_TERMS and (signals or multi_part):
+        # 4. Distinct framework concepts — counted once per concept via
+        #    word-boundary matches against the normalised (opener-stripped)
+        #    text.
+        tech_matches = sorted(set(_TECH_TERMS_RE.findall(stripped)))
+        num_concepts = len(tech_matches)
+
+        # STANDALONE: three or more distinct concepts (multi-hop even without
+        # connector language).
+        if num_concepts >= MIN_AGENTIC_CONCEPTS:
+            signals.append(f"multi_concept:{','.join(tech_matches[:5])}")
+        # CORROBORATING: exactly two concepts — only contributes when another
+        # complexity signal has already fired ("query parameter" is a single
+        # compound concept, not a standalone trigger).
+        elif num_concepts >= MIN_TECH_TERMS and (signals or multi_part):
             signals.append(f"multi_tech_terms:{','.join(tech_matches[:5])}")
 
         if signals:

@@ -78,7 +78,10 @@ def agentic_ask(
         citation_engine: A ``CitationEngine`` (default: ``StandardCitationEngine``).
         strategy: ``"auto"`` (gate decides), ``"direct"`` (force fast path) or
             ``"agentic"`` (force the loop).
-        top_k: Retrieval count; defaults to ``config.RETRIEVAL_TOP_K``.
+        top_k: Retrieval count.  On the direct/fast path defaults to
+            ``config.RETRIEVAL_TOP_K``; on the agentic loop path defaults to
+            ``config.AGENT_LOOP_TOP_K`` (a caller-supplied value overrides
+            both).
         language: Retrieval language filter; defaults to
             ``config.RETRIEVAL_LANGUAGE``; ``"any"`` disables filtering.
         max_retries: Hard judge budget; defaults to ``config.AGENT_MAX_RETRIES``
@@ -98,7 +101,10 @@ def agentic_ask(
             f"strategy must be one of 'auto', 'direct', 'agentic'; got {strategy!r}"
         )
 
-    top_k = top_k if top_k is not None else config.RETRIEVAL_TOP_K
+    # Fast/direct path keeps RETRIEVAL_TOP_K; the agentic loop broadens to
+    # AGENT_LOOP_TOP_K unless the caller explicitly overrode ``top_k``.
+    fast_top_k = top_k if top_k is not None else config.RETRIEVAL_TOP_K
+    loop_top_k = top_k if top_k is not None else config.AGENT_LOOP_TOP_K
     resolved_language = _resolve_language(language)
     max_retries = max_retries if max_retries is not None else (
         config.AGENT_MAX_RETRIES or DEFAULT_MAX_RETRIES
@@ -133,7 +139,7 @@ def agentic_ask(
             retriever=retriever,
             generator=generator,
             citation_engine=citation_engine,
-            top_k=top_k,
+            top_k=fast_top_k,
             language=resolved_language,
         )
         gate_step = LoopTraceStep.new(
@@ -171,7 +177,7 @@ def agentic_ask(
         judge=judge,
         generator=generator,
         citation_engine=citation_engine,
-        top_k=top_k,
+        top_k=loop_top_k,
         language=None if resolved_language == "any" else resolved_language,
         max_retries=max_retries,
     )

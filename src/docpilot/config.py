@@ -50,6 +50,12 @@ RETRIEVAL_LANGUAGE: str = os.getenv("RETRIEVAL_LANGUAGE", "en")
 AGENT_MAX_RETRIES: int = int(os.getenv("AGENT_MAX_RETRIES", "2"))
 """Maximum judge/reformulate iterations before the agent refuses (SPEC §4.1)."""
 
+AGENT_LOOP_TOP_K: int = int(os.getenv("AGENT_LOOP_TOP_K", "8"))
+"""Retrieval count used inside the agentic loop (the agentic retrieve calls)
+when the caller did not override ``top_k``.  The direct/fast path keeps
+``RETRIEVAL_TOP_K`` (5) — broader retrieval is reserved for the loop so both
+the loop retrieval and the judge see up to 8 chunks."""
+
 AGENT_DEFAULT_STRATEGY: str = os.getenv("AGENT_DEFAULT_STRATEGY", "auto")
 """Default ``ask --strategy`` when the flag is not given (``auto|direct|agentic``)."""
 

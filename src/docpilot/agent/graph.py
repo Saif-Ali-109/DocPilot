@@ -134,6 +134,13 @@ def make_nodes(
     def retrieve_node(state: AgentLoopState) -> dict:
         started = time.perf_counter()
         query: str = state["current_query"]
+        turn = sum(1 for t in state["trace"] if t.get("step") == "search") + 1
+        logger.debug(
+            "Agent retrieve: turn=%s top_k=%s language=%s",
+            turn,
+            top_k,
+            language,
+        )
         results = retriever.retrieve(query, top_k=top_k, language=language)
 
         sources = [
@@ -146,7 +153,6 @@ def make_nodes(
         ]
         logger.debug("Agent retrieve (query=%r): %d result(s)", query, len(results))
 
-        turn = sum(1 for t in state["trace"] if t.get("step") == "search") + 1
         top_scores = [round(r.score, 4) for r in results[:3]]
         detail = (
             f"turn={turn}: retrieved {len(results)} chunks; "
@@ -296,7 +302,8 @@ def build_graph(
         judge: A ``SufficiencyJudge`` (one LLM call per invocation).
         generator: A ``Generator`` for final answer construction.
         citation_engine: A ``CitationEngine`` for inline markers + footer.
-        top_k: Retrieval count; defaults to ``config.RETRIEVAL_TOP_K``.
+        top_k: Retrieval count for the loop; defaults to
+            ``config.AGENT_LOOP_TOP_K`` (broader than the fast path).
         language: Optional retrieval language filter (``None`` = no filter).
         max_retries: Hard budget for judge calls; defaults to
             ``config.AGENT_MAX_RETRIES`` (falling back to
@@ -307,7 +314,7 @@ def build_graph(
         :class:`AgentLoopState` runs retrieve → judge → (answer | refuse |
         retrieve…) and returns the final state dict.
     """
-    top_k = top_k if top_k is not None else config.RETRIEVAL_TOP_K
+    top_k = top_k if top_k is not None else config.AGENT_LOOP_TOP_K
     max_retries = max_retries if max_retries is not None else (
         config.AGENT_MAX_RETRIES or DEFAULT_MAX_RETRIES
     )

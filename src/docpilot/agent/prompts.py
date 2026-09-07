@@ -42,13 +42,17 @@ You MUST output ONLY a single JSON object with exactly these keys:
                          or the verdict is sufficient.
 
 Rules:
-- If the chunks clearly contain enough evidence to answer the question
-  (even if partial), return "sufficient".
-- If the chunks are missing key information needed to give a complete and
-  accurate answer, return "insufficient" and propose a single reformulated
-  query that focuses on the missing aspect.
-- If uncertain, lean towards "sufficient" — the answering LLM can still
-  refuse if its own judgement differs.
+- Mark "sufficient" when the provided chunks, taken together, can support
+  answering the question — even if a specific detail is only partially covered, mark
+  SUFFICIENT when the concept is present and citable.  Note any gaps in the
+  reason.
+- Reserve "insufficient" for when the chunks contain no usable evidence to begin answering;
+  in that case propose a single reformulated_query targeting the likely doc
+  section/topic (feature name, tutorial/xxx page).
+- Do not mark insufficient merely because a specific sentence is absent —
+  mark sufficient when the concept is present in the chunks.
+- If uncertain, lean towards "sufficient" — the downstream answering LLM
+  still applies its own honesty gate and can refuse if the evidence is weak.
 - The reformulated_query (when present) MUST be in the same language as the
   question.
 - Output ONLY the JSON object.  No markdown fences, no explanation before

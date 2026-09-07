@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from docpilot.agent.gate import (
     HeuristicQueryClassifier,
+    MIN_AGENTIC_CONCEPTS,
     MIN_TECH_TERMS,
     SIMPLE_WORD_LIMIT,
 )
@@ -100,6 +101,34 @@ class TestHeuristicGate:
 
     def test_multiple_technical_terms_constant(self) -> None:
         assert MIN_TECH_TERMS == 2
+
+    # ── standalone multi_concept signal (PLAN §3.7 fix) ───────────────────
+
+    def test_multi_concept_standalone_fires_without_connectors(self) -> None:
+        """§3.8 multi-hop seeds that juxtapose 3+ concepts with no connector
+        words and ≤18 words — these routed DIRECT pre-fix and must now fire
+        the standalone multi_concept signal."""
+        failing_seeds = [
+            "Exception raised inside a dependency — interaction with exception handlers/middleware?",
+            "WebSocket endpoint + HTTP route sharing one auth dependency — wiring?",
+            "OAuth2 security scopes + custom dependency to restrict routes?",
+        ]
+        for question in failing_seeds:
+            decision = self.gate.classify(question)
+            assert decision.agentic is True, f"not agentic: {question!r}"
+            assert any(
+                s.startswith("multi_concept") for s in decision.signals
+            ), f"no multi_concept signal for {question!r}: {decision.signals}"
+
+    def test_two_concepts_alone_are_corroborating_only(self) -> None:
+        """Two distinct concepts without any other signal is still a single
+        compound concept — must NOT fire standalone (no double-firing)."""
+        decision = self.gate.classify("How do I validate a form file?")
+        assert decision.agentic is False
+        assert decision.signals == []
+
+    def test_min_agentic_concepts_constant(self) -> None:
+        assert MIN_AGENTIC_CONCEPTS == 3
 
     # ── explicit multi-part pattern ─────────────────────────────────────
 
