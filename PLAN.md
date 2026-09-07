@@ -15,7 +15,7 @@
     optional code validation → extract reusable framework components.
     Do not skip ahead. Do not let later phases' ambitions leak into earlier
     phases' scope.
-- current_phase: 2
+- current_phase: 3
 - working_repo: https://github.com/Saif-Ali-109/DocPilot.git
 - working_dir: /home/ain/Desktop/RAG
 - spec_source_of_truth: >
@@ -249,9 +249,9 @@
 
 ---
 
-## 3. phase_2: "Agentic Retrieval"
+## 3. phase_2: "Agentic Retrieval" — COMPLETE 2026-09-07 (milestone `phase-2`)
 
-- status: ACTIVE (flipped at the phase-1-complete milestone, 2026-09-06)
+- status: COMPLETE (milestone `phase-2` cut 2026-09-07; §3.7 exit criteria live-verified, §3.11)
 - summary: >
     LangGraph conditional loop behind the `Agent` interface (PLAN §9 interfaces,
     first implementation). The loop analyzes → searches → judges evidence
@@ -401,7 +401,9 @@ retrieved_count + top scores, step label, step latency ms.
     7. WebSocket endpoint + HTTP route sharing one auth dependency — wiring?
     8. OAuth2 security scopes + custom dependency to restrict routes?
 - simple (must stay on fast path): 9. "How do I install FastAPI?" 10. "What is a query parameter in FastAPI?"
-- refuse: 11. Auto-cache DB queries without extra code (uncovered → loop → refuse).
+- refuse: 11. Auto-cache DB queries without extra code (uncovered → gate-classified
+  simple, no signal fires → direct fast-path refuse; loop → budget → refuse is
+  live-verified separately by seeds 4/6 and the forced-agentic edge probes — §3.11).
   12. Live OAuth token-expiration bug status (live state → Phase 3 territory → refuse in Phase 2).
 
 ## 3.9 execution_order
@@ -421,6 +423,53 @@ retrieved_count + top scores, step label, step latency ms.
 2. Per-step latency in trace only; no aggregates/comparisons/claims in Phase 2.
 3. Our LoopTraceStep only; no LangGraph/LangSmith tracing.
 4. ask --strategy auto|direct|agentic only; no --agentic alias.
+
+## 3.11 verification (live seed QA — milestone gate for the `phase-2` tag)
+
+Method: `.venv/bin/python -m docpilot ask "<seed>" --debug` against the live stack
+(real Groq `gpt-oss-20b`, local BGE-small, pgvector, LangGraph 1.2.11), default
+`auto` strategy, `RETRIEVAL_LANGUAGE=en`, `AGENT_MAX_RETRIES=2`,
+`AGENT_LOOP_TOP_K=8`. Full stdout/stderr artifacts retained
+(`/tmp/opencode/reqa/`).
+
+Seed results (12/12 live):
+- multi_hop seeds 1–8 → **all route agentic** (`Gate decision: agentic → agentic
+  loop engaged`). Seeds 3/7/8 now fire the standalone `multi_concept` signal
+  (≥3 distinct concepts — `exception,dependency,middleware` /
+  `websocket,endpoint,auth,dependency` / `oauth2,security,scopes`), fixing their
+  mis-routing to direct in the first QA round (§3.7 criterion 1).
+- Loop answers with correct `[N]` citations + footer: seeds 1, 2, 3, 5, 7, 8 (6/8),
+  judge `sufficient` on attempt 1; every cited Source under `en/`.
+- Seeds 4, 6: loop engaged, judge `insufficient` on both permitted rounds →
+  budget exhausted → verbatim §3.9 refusal. Judge reasons (quoted): 4 — "the
+  retrieved chunks do not contain explicit evidence that the same Pydantic model
+  can be used for both the request body and the response_model"; 6 — "explain the
+  difference between Annotated and legacy Depends syntax but do not provide
+  evidence about whether they can be mixed". These are spec-correct honest
+  refusals (SPEC §3.9); answer-coverage quality is Phase 4 (Evaluation) territory.
+- simple seeds 9, 10 → direct fast path; guardrail held (cross-A: byte-identical
+  stdout vs `--strategy direct`).
+- refuse seeds 11, 12 → verbatim §3.9 refusal. Loop→budget→refuse is live-proven
+  by seeds 4/6 and the forced-agentic probes; seed 11's fast-path refusal is the
+  gate correctly classifying a structurally simple uncovered question.
+
+Cross-checks:
+- A. `diff` seed-9 default stdout vs `--strategy direct` → **empty** (byte-identical).
+- B. `--json` (seed 5): Phase-1 keys intact + additive `strategy|direct|refused|
+  trace`; trace `['gate','search','judge','answer']`, trace[0]
+  `{'step':'gate','decision':'agentic'}`, `latency_ms` ints, valid JSON, no
+  LangGraph/LangSmith objects leaked.
+- C. judge calls ≤ 2 on every loop run; `Agent refuse node: budget exhausted
+  (attempts=2)` after the two `insufficient` rounds.
+- D. `--strategy agentic` on simple seed 10 → `forced-agentic` + answered;
+  `--strategy direct` on multi-hop seed 7 → `forced-direct`, fast path only.
+
+Edge QA (2026-09-06, disjoint probes): per-turn `Agent retrieve: turn=N top_k=8
+language=en` DEBUG lines in the loop; degenerate inputs (empty / whitespace /
+uppercase / code-block-mention) exit 0 with no tracebacks; refuse-path `--json`
+is plain-serialisable.
+
+Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
 
 ## 4. phase_3: "MCP / GitHub Tooling"
 - status: PLANNED

@@ -263,7 +263,7 @@ Sources:
 
 ### 3.14 Interfaces
 
-All components are behind interfaces (abstract base classes or protocols). Even though only one implementation exists in Phase 1, this allows swapping internals later without rewriting call sites.
+All components are behind interfaces (abstract base classes or protocols). Even during Phase 1, when only one implementation existed per interface, this design lets internals be swapped later without rewriting call sites.
 
 | Interface | Phase 1 Implementation |
 |-----------|----------------------|
@@ -279,6 +279,8 @@ All components are behind interfaces (abstract base classes or protocols). Even 
 | `Generator` | Groq openai/gpt-oss-20b (via .env GROQ_MODEL) |
 | `CitationEngine` | Inline [1] marker + source footer |
 | `Evaluator` | Not implemented in Phase 1 |
+
+**Phase 2 update (2026-09-06):** `Agent` is implemented — `AgenticAgent` (LangGraph loop) behind `Agent(ABC)` with `agentic_ask()` (§4); `QueryClassifier` (`HeuristicQueryClassifier`) and `SufficiencyJudge` (`LLMSufficiencyJudge`) were introduced in Phase 2 and are not part of the Phase 1 table above. `Tool` becomes Phase 3; `Reranker` and `Evaluator` are Phase 4. The table above is the Phase 1 snapshot.
 
 Do not hard-code `groq.chat(...)` or `qdrant_client.search(...)` calls through business logic — always go through the relevant interface.
 
@@ -392,7 +394,7 @@ Because Phase 4 evaluation must trust "answer correctness," Phase 1 needs unit-l
 
 ---
 
-## 4. Phase 2 — Agentic Retrieval
+## 4. Phase 2 — Agentic Retrieval — COMPLETE 2026-09-06 (milestone `phase-2`)
 
 Implements the conditional agentic loop behind the `Agent` interface (first
 implementation; PLAN §9 interface list). Fast path (Phase 1 `pipeline_ask.ask`)
@@ -443,6 +445,7 @@ unchanged (contract_version 1.0).
 | `AGENT_DEFAULT_STRATEGY` | auto | CLI overridable via `--strategy` |
 | `AGENT_GATE_LONG_THRESHOLD` | 18 | Word-count gate trigger |
 | `AGENT_JUDGE_MODEL` | (empty → `GROQ_MODEL`) | Optional separate judge model |
+| `AGENT_LOOP_TOP_K` | 8 | Loop retrieve breadth (fast path keeps `RETRIEVAL_TOP_K`=5; caller override wins) |
 
 ### 4.4 Trace
 
@@ -451,19 +454,33 @@ Every `LoopTraceStep`: turn # → `query_used`, `verdict`, `reason`,
 Logged at DEBUG on stderr; surfaced as additive `"trace"` in `--json`. Latency
 fields are for inspectability only (§4.1).
 
-### 4.5 Exit criteria (Phase 2)
+### 4.5 Exit criteria (Phase 2) — live-verified 2026-09-06/07
 
-- Gate is correct on the seed question set (multi-hop → agentic, simple → direct).
-- Loop answers the multi-hop seed questions with correct `[N]` citations + footer.
-- Budget enforced (≤ `AGENT_MAX_RETRIES`), then refuses.
-- "I don't know" (exact §3.9 wording) when evidence stays insufficient.
-- Fast-path regression: simple questions behave identically to Phase 1.
-- Trace per query in `--debug` (stderr) and `--json` (`"trace"`).
-- All behind the `Agent` interface; LangGraph code has no vendor calls; our
-  tracing only; CLI surface is exactly `--strategy auto|direct|agentic`.
-- Phase 2 produces no performance numbers or Phase-1-vs-2 comparisons.
-- Full test suite green; agent tests hermetic (stubbed Generator), integration
-  variants marked and skip-if-unreachable.
+- [x] Gate is correct on the seed question set (multi-hop → agentic, simple → direct).
+- [x] Loop answers the multi-hop seed questions with correct `[N]` citations + footer.
+- [x] Budget enforced (≤ `AGENT_MAX_RETRIES`), then refuses.
+- [x] "I don't know" (exact §3.9 wording) when evidence stays insufficient.
+- [x] Fast-path regression: simple questions behave identically to Phase 1.
+- [x] Trace per query in `--debug` (stderr) and `--json` (`"trace"`).
+- [x] All behind the `Agent` interface; LangGraph code has no vendor calls; our
+      tracing only; CLI surface is exactly `--strategy auto|direct|agentic`.
+- [x] Phase 2 produces no performance numbers or Phase-1-vs-2 comparisons.
+- [x] Full test suite green; agent tests hermetic (stubbed Generator), integration
+      variants marked and skip-if-unreachable.
+
+**Live evidence (seed QA + edge QA, 2026-09-06/07):** 12/12 seed questions run
+against the live stack (Groq `gpt-oss-20b`, BGE-small, pgvector, LangGraph
+1.2.11). Gate: all 8 multi-hop seeds route agentic (seeds 3/7/8 via the
+standalone `multi_concept` signal — ≥3 distinct concepts — a fix from the first
+QA round where they mis-routed direct); simple seeds 9/10 stay direct. Loop:
+6/8 multi-hop seeds answered with correct `[N]` citations + footer, judged
+`sufficient` on attempt 1; seeds 4/6 refused honestly after the 2-round budget
+(judge: chunks lacked explicit evidence for the "same model reused for body +
+response_model" / "Annotated vs legacy mixability" claims). Refuse seeds 11/12
+emit the verbatim §3.9 sentence. Fast-path regression byte-identical
+(`diff` empty); `--json` trace `gate→search→judge→answer` with int latencies and
+additive keys; judge calls ≤ `AGENT_MAX_RETRIES` on every loop run; degenerate
+inputs exit 0 with no tracebacks. Suite 193 passed (190 hermetic + 3 live).
 
 **Guardrail (unchanged):** Simple questions route straight through classic RAG
 (fast, cheap). Agentic looping is conditional — only for multi-hop or ambiguous
