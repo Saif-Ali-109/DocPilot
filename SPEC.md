@@ -581,6 +581,16 @@ its cost — until this phase's measurements exist (§2 hard rules).
 **Required comparison:** Classic RAG (Phase 1) vs. agentic RAG (Phase 2) on the
 same benchmark. Claims of improvement must be backed by this data, not asserted.
 
+**Scoring contract (amended 2026-09-08):** for docs-answerable rows, gold key
+facts are short paraphrase-robust fragments — an identifier or concept token
+every correct answer must contain — rather than verbatim corpus sentences.
+Verbatim-sentence containment measures paraphrase-avoidance, not correctness;
+on the first live run it scored 0.00 across all doc questions while the sidecar
+evidence showed every retrieval and generation was correct. Gold source files
+are the stored corpus-relative paths exactly as the vector store returns them
+(not filesystem paths), so retrieval recall and citation-gold accuracy compare
+against strings that actually occur in `source_files`.
+
 ### 6.2 Client-required evaluation scope (locked 2026-09-07, client review)
 
 - **False-refusal rate + 3-way decomposition.** Every refusal is classified as a
@@ -619,16 +629,49 @@ same benchmark. Claims of improvement must be backed by this data, not asserted.
 
 ### 6.4 Exit criteria (Phase 4)
 
-- [ ] Benchmark dataset committed: labeled verdict triples, adversarial
+- [x] Benchmark dataset committed: labeled verdict triples, adversarial
       paraphrases, tool-necessity tri-class gold labels.
 - [ ] Classic-RAG vs. agentic-RAG comparison on all §6.1 metrics, one table.
 - [ ] False-refusal decomposition (retrieval / judge / routing) on the benchmark.
-- [ ] Judge calibration report: verdict accuracy, adversarial robustness,
+- [x] Judge calibration report: verdict accuracy, adversarial robustness,
       parse-failure rate, and the two-prompt A/B result.
-- [ ] Tool-necessity report: false-positive / false-negative rates on the
+- [x] Tool-necessity report: false-positive / false-negative rates on the
       tri-class set.
 - [ ] Parse-fallback flip-condition check run, with the keep-vs-flip decision
       recorded.
+
+### 6.5 Live-run protocol & quota resilience (amended 2026-09-08, user sign-off)
+
+Phase 4 live runs draw judge, generator, and grounding-checker calls from one
+model-level daily token budget (`openai/gpt-oss-20b` free tier: 200k TPD /
+8k TPM), and a full benchmark pass is token-heavy — every question embeds full
+retrieved contexts and agentic questions make 3–5 LLM calls each. Live-run
+protocol, locked:
+
+- **Per-half checkpointing.** Each pipeline's scored run is written to a
+  sidecar file the moment it completes; the combined report + §6.1 comparison
+  is written only when both halves exist. A quota crash never loses a finished
+  half.
+- **Resume-at-stamp.** The missing half is rerun under the crashed run's
+  original stamp (`--pipeline {classic,agentic} --resume STAMP`); the finished
+  sidecar is adopted and the same-stamp combined report produced.
+  `--merge DIR STAMP` merges two existing sidecars. Granularity is per
+  pipeline — a crashed half reruns wholesale; per-question resume is not in
+  scope.
+- **Probe before launch.** Live runs are gated on a `--probe` headroom check
+  (one tiny completions call) so a quota-exhausted org is detected up front
+  instead of after a ~40-minute dead run.
+- **429 self-healing.** The generator honors the server's `retry-after` on
+  rate-limit errors (bounded), so per-minute bursts recover; a daily-cap wall
+  fails fast instead of hanging retries.
+- **Provenance.** A resumed half is flagged in the report note; the §6.1 table
+  states its run provenance (single continuous run vs. resumed windows) next
+  to the numbers. Same-model temp-0 runs still show run-to-run variance in the
+  NLI-style groundedness audit, which is documented as a proxy.
+- **Token accounting (open).** The generator discards Groq's per-call `usage`;
+  token consumption is not yet inspectable from committed reports. Recording
+  token usage is a follow-up harness improvement so quota economics stay
+  auditable.
 
 ---
 

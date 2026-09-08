@@ -547,8 +547,11 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
 
 ## 5. phase_4: "Evaluation"
 - status: IN PROGRESS (2026-09-08) — slices 1–2 complete (judge two-prompt A/B,
-  tool-necessity tri-class); next: classic-vs-agentic §6.1 comparison,
-  false-refusal decomposition, parse-fallback flip-condition check
+  tool-necessity tri-class). Slice 3 (classic-vs-agentic §6.1 comparison) in
+  progress: classic half complete + committed (stamp 190539, post-fix scoring),
+  agentic half blocked on a fresh-quota Groq key (daily TPD exhausted on the
+  current org); resume + L2 quota insurance agreed (SPEC §6.5). Then:
+  false-refusal decomposition, parse-fallback flip-condition check.
 - summary: >
     Build a benchmark dataset and track: retrieval quality, answer correctness,
     citation correctness, groundedness/hallucination rate, "I don't know"
@@ -625,9 +628,59 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
     decomposition slices.
 - exit_criteria_progress: SPEC §6.4 "tool-necessity report: FP/FN rates on the
   tri-class set" → **CLOSED**; "benchmark dataset committed (labeled verdict
-  triples + adversarial + tri-class gold)" → committed across slices 1–2.
-  Remaining: §6.1 classic-vs-agentic comparison, false-refusal decomposition,
-  parse-fallback flip-condition check.
+  triples + adversarial + tri-class gold)" → committed across slices 1–2;
+  "judge calibration report" → CLOSED (slice 1). SPEC §6.4 updated to match
+  (2026-09-08). Remaining: §6.1 classic-vs-agentic comparison, false-refusal
+  decomposition, parse-fallback flip-condition check.
+
+### 5.3 slice_3 classic-vs-agentic §6.1 comparison (2026-09-08 — in progress)
+- dataset: `src/docpilot/eval/dataset/benchmark.json` — 15 questions (8
+  docs-answerable / 4 live-state-answerable / 3 neither). Gold key facts are
+  short paraphrase-robust fragments; gold sources are stored corpus-relative
+  paths (post-fix v2, commit 08086dd).
+- harness: `src/docpilot/eval/benchmark.py` — `run_pipeline`, injectable
+  `GroundingChecker` (NLI-style proxy over `Generator.generate`, callable
+  form), per-half sidecar checkpointing, `--pipeline {classic,agentic}` /
+  `--resume STAMP` / `--merge DIR STAMP`, one-table comparison builder.
+  334 hermetic tests.
+- scoring-fix root cause: the first live run scored 0.00 across ALL doc rows;
+  the sidecar audit showed retrieval hit the correct files and every answer
+  was correct. Two gold-data defects, not system failures: (1) gold paths
+  carried a `docs/` filesystem prefix the vector store never emits
+  (`en/docs/...`), zeroing recall + citation-gold; (2) verbatim corpus
+  sentences as gold facts — the generator paraphrases by design, so sentence
+  containment penalized correct answers. Fixed to stored paths + fragment
+  facts; offline re-scoring of the completed run validated the fix (recall@k
+  1.0000 for both pipelines) before any rerun.
+- live runs: stamp `20260908_184441` completed BOTH pipelines pre-fix
+  (superseded scoring); stamp `20260908_190539` reran post-fix — classic
+  complete + committed (`benchmark_20260908_190539_classic.json`), agentic
+  crashed mid-run on daily quota (TPD limit 200000, Used 199443).
+- classic half (stamp 190539, post-fix scoring):
+  | metric | value |
+  | --- | --- |
+  | answer_correctness | 0.8000 |
+  | retrieval recall@k (docs) | 1.0000 |
+  | citation validity | 1.0000 |
+  | citation gold accuracy (docs) | 0.5833 |
+  | refusal accuracy (I-don't-know) | 1.0000 |
+  | groundedness (NLI proxy) | 0.7000 |
+  | avg latency | 9046 ms |
+  | retrieval calls / tool calls | 1.0000 / 0 |
+- blocked on: fresh-quota Groq key (decision, user): swap org → resume agentic
+  half (`--pipeline agentic --resume 20260908_190539`) → auto-merge under the
+  same stamp → §6.1 one-table comparison. Fallback if quota never materializes
+  (not preferred): labeled two-run table using the completed pre-fix agentic
+  sidecar, documented caveat.
+- agreed insurance (user sign-off → SPEC §6.5): generator honors server
+  `retry-after` on 429 (self-heals TPM bursts) + `--probe` headroom gate
+  before launch. L3 per-question checkpointing considered and declined for now.
+- follow-up: token accounting — generator discards Groq `usage`; record
+  per-call tokens in reports so quota economics are inspectable.
+- exit_criteria_progress: §6.4 "classic-vs-agentic comparison" → in progress
+  (classic half + table machinery done; agentic half pending quota). After
+  this slice: false-refusal decomposition, parse-fallback flip-condition
+  check.
 
 ## 6. phase_5: "API + UI"
 - status: PLANNED
