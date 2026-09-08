@@ -7,7 +7,13 @@ can assert the one-call-per-judge invariant (SPEC §4.1).
 
 from __future__ import annotations
 
-from docpilot.agent.judge import LLMSufficiencyJudge
+import logging
+
+from docpilot.agent.judge import (
+    LLMSufficiencyJudge,
+    judge_parse_fallback_counts,
+    reset_judge_parse_fallback_counts,
+)
 from docpilot.agent.prompts import JUDGE_SYSTEM_PROMPT, build_judge_user_prompt
 from docpilot.agent.types import Judgment
 from docpilot.core.models import Chunk, RetrieverResult
@@ -302,3 +308,63 @@ class TestBuildJudgeUserPrompt:
         # Old 3-arg callers keep working — default keeps needs_tool enabled.
         prompt = build_judge_user_prompt("Q?", "Q?", [_result()])
         assert "TOOLS AVAILABLE: yes" in prompt
+
+
+class TestJudgeParseFallbackCounter:
+    """The parse-fallback counter records each defensive ``sufficient`` —
+    one count per cause, plus a stable INFO log line carrying the running
+    total (Phase 4 flip-condition signal, SPEC §6.3)."""
+
+    def _run(self, raw: str) -> None:
+        _judge(StubGenerator(raw))
+
+    def test_empty_output_records_empty_cause(self) -> None:
+        reset_judge_parse_fallback_counts()
+        self._run("")
+        assert judge_parse_fallback_counts() == {"empty": 1}
+
+    def test_unparseable_output_records_unparseable_cause(self) -> None:
+        reset_judge_parse_fallback_counts()
+        self._run("I cannot evaluate this document set right now.")
+        assert judge_parse_fallback_counts() == {"unparseable": 1}
+
+    def test_unknown_verdict_records_bad_verdict_cause(self) -> None:
+        reset_judge_parse_fallback_counts()
+        self._run('{"verdict": "ambiguous", "reason": "uncertain",'
+                  ' "reformulated_query": null}')
+        assert judge_parse_fallback_counts() == {"bad_verdict": 1}
+
+    def test_counts_accumulate_and_reset(self) -> None:
+        reset_judge_parse_fallback_counts()
+        self._run("")  # empty
+        self._run("no json here")  # unparseable
+        self._run('{"verdict": "maybe"}')  # bad_verdict
+        assert judge_parse_fallback_counts() == {
+            "empty": 1,
+            "unparseable": 1,
+            "bad_verdict": 1,
+        }
+        reset_judge_parse_fallback_counts()
+        assert judge_parse_fallback_counts() == {}
+
+    def test_successful_parse_does_not_increment(self) -> None:
+        reset_judge_parse_fallback_counts()
+        self._run('{"verdict": "sufficient", "reason": "ok",'
+                  ' "reformulated_query": null}')
+        self._run('{"verdict": "insufficient", "reason": "x",'
+                  ' "reformulated_query": "q"}')
+        assert judge_parse_fallback_counts() == {}
+
+    def test_info_log_line_has_stable_format(self, caplog) -> None:
+        reset_judge_parse_fallback_counts()
+        with caplog.at_level(logging.INFO, logger="docpilot.agent.judge"):
+            self._run("")  # first fallback: total=1
+            self._run("still not json")  # second fallback: total=2
+        lines = [r.getMessage() for r in caplog.records]
+        assert (
+            "Judge parse fallback: cause=empty -> sufficient, total=1" in lines
+        )
+        assert (
+            "Judge parse fallback: cause=unparseable -> sufficient, total=2"
+            in lines
+        )

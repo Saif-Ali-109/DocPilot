@@ -6,7 +6,9 @@
 vendor calls here.
 
 On parse failure the judge returns a defensive ``"sufficient"`` verdict so
-the loop never crashes (PLAN §3.2 guard).
+the loop never crashes (PLAN §3.2 guard).  Every fallback is also counted
+per cause and logged at INFO — the Phase 4 flip-condition signal that the
+judge's output is drifting from the JSON contract (SPEC §6.3).
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
+from collections import Counter
 
 from docpilot.agent.prompts import JUDGE_SYSTEM_PROMPT, build_judge_user_prompt
 from docpilot.agent.types import Judgment
@@ -22,6 +25,12 @@ from docpilot.core.models import RetrieverResult
 from docpilot.generation.generator import Generator
 
 logger = logging.getLogger(__name__)
+
+# Per-cause count of defensive "sufficient" parse fallbacks, keyed by cause
+# ("empty", "unparseable", "bad_verdict").  Accumulates over the judge's
+# lifetime in this process; inspect via :func:`judge_parse_fallback_counts`
+# and reset with :func:`reset_judge_parse_fallback_counts`.
+_PARSE_FALLBACK_COUNTER: Counter[str] = Counter()
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +140,39 @@ _JUDGE_KEYS = frozenset(
 )
 
 
+def judge_parse_fallback_counts() -> dict[str, int]:
+    """Snapshot of per-cause parse-fallback counts (read-only copy).
+
+    Causes: ``empty`` (blank raw output), ``unparseable`` (none of the
+    tolerant-parse attempts succeeded), ``bad_verdict`` (JSON parsed but the
+    ``verdict`` value was neither ``sufficient`` nor ``insufficient``).
+    """
+    return dict(_PARSE_FALLBACK_COUNTER)
+
+
+def reset_judge_parse_fallback_counts() -> None:
+    """Reset the parse-fallback counter (test/phase boundary hook)."""
+    _PARSE_FALLBACK_COUNTER.clear()
+
+
+def _record_parse_fallback(cause: str) -> None:
+    """Record one defensive fallback and log it at INFO.
+
+    The INFO line is deliberately stable — the Phase 4 flip-condition check
+    (SPEC §6.3) greps for it:
+
+        Judge parse fallback: cause=<cause> -> sufficient, total=<n>
+
+    where ``total`` is the running count across all causes in this process.
+    """
+    _PARSE_FALLBACK_COUNTER[cause] += 1
+    logger.info(
+        "Judge parse fallback: cause=%s -> sufficient, total=%d",
+        cause,
+        sum(_PARSE_FALLBACK_COUNTER.values()),
+    )
+
+
 def _parse_judgment(raw: str) -> Judgment:
     """Parse the judge's raw output into a :class:`Judgment`.
 
@@ -145,6 +187,7 @@ def _parse_judgment(raw: str) -> Judgment:
     Never raises — always returns a valid :class:`Judgment`.
     """
     if not raw or not raw.strip():
+        _record_parse_fallback("empty")
         logger.debug("Judge returned empty output — defaulting to sufficient")
         return Judgment(
             verdict="sufficient",
@@ -171,6 +214,7 @@ def _parse_judgment(raw: str) -> Judgment:
             return _extract_judgment(candidate)
 
     # Attempt 4: defensive fallback
+    _record_parse_fallback("unparseable")
     logger.debug("Judge output unparseable — defaulting to sufficient")
     return Judgment(
         verdict="sufficient",
@@ -197,6 +241,7 @@ def _extract_judgment(obj: dict) -> Judgment:
     verdict = obj.get("verdict", "")
     if verdict not in ("sufficient", "insufficient"):
         # Unknown verdict — lean toward sufficient (PLAN §3.2 guard)
+        _record_parse_fallback("bad_verdict")
         logger.debug("Unknown judge verdict %r — defaulting to sufficient", verdict)
         verdict = "sufficient"
 

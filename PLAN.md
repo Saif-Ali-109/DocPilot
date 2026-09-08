@@ -471,10 +471,9 @@ is plain-serialisable.
 
 Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
 
-## 4. phase_3: "GitHub Tooling" — implemented 2026-09-07 (live QA + tag pending)
-- status: IN PROGRESS — implementation complete; hermetic suite green
-  (230 passed); live GitHub QA blocked on `GITHUB_PAT` in `.env`; no `phase-3`
-  tag until the QA passes (SPEC §5.5).
+## 4. phase_3: "GitHub Tooling" — implemented 2026-09-07, live QA passed 2026-09-08
+- status: COMPLETE — implementation + hermetic suite (236 passed) + live QA
+  (fastapi/fastapi, 2026-09-08) all green; tagged `phase-3` (SPEC §5.5).
 - name_note: >
     Originally "MCP / GitHub Tooling". Locked decision (2026-09-07): plain
     GitHub REST behind the `Tool` interface — NO MCP protocol/SDK (SPEC §5.1).
@@ -515,7 +514,8 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
   budget-vs-tool ordering; tool failure → refuse; no-tool degradation), judge
   `needs_tool`/`tool_request` tolerant parsing, pipeline tool injection,
   guardrail assertions (no `tool_call` step on doc-answerable questions).
-- Live GitHub QA pending PAT — checklist in §4.5.
+- Live GitHub QA passed 2026-09-08 (fastapi/fastapi, GITHUB_PAT via `~/.bashrc`,
+  owner/repo injected at runtime) — checklist in §4.5.
 
 ### 4.4 exit_criteria (SPEC §5.5)
 - [x] `Tool` + `GitHubTool` (no MCP), PAT-gated
@@ -523,17 +523,27 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
 - [x] `tool_call` node: within budget, never loops back; error → verbatim refuse
 - [x] No-PAT → Phase 2-identical loop
 - [x] Tool evidence cited (context + footer)
-- [x] Suite 230 passed (227 hermetic + 3 live)
-- [ ] Live QA (fastapi/fastapi): tool-fires (issues + commits), tempt-the-tool
-      guardrail, refusal regression — blocked on `GITHUB_PAT`
-- [ ] `phase-3` tag + native `GitHubTool` demo only after live QA passes
+- [x] Suite 236 passed (233 hermetic + 3 live)
+- [x] Live QA (fastapi/fastapi 2026-09-08): tool-fires (issues + commits),
+      tempt-the-tool guardrail, refusal regression — all 5 probes pass
+- [x] `phase-3` tag + native `GitHubTool` demo (tag cut after live QA passed)
 
-### 4.5 verification (partial — implementation evidence only)
-- 230 tests green; Phase 1/2 regression protected (direct fast path untouched,
-  `tool=None` loop byte-identical).
-- Measurement status: judge `needs_tool` accuracy and tool-trigger necessity on
-  real GitHub are UNMEASURED until the live QA runs — held as unknowns, not
-  progress claims (client-review standard).
+### 4.5 verification (live QA passed 2026-09-08 — fastapi/fastapi)
+- 236 tests green (233 hermetic + 3 live pgvector); Phase 1/2 regression
+  protected (direct fast path untouched, `tool=None` loop byte-identical).
+- Live probes, all PASS:
+  (a) open-issue OAuth2 → `github.search_issues` fires (`is:issue is:open`),
+      cited answer `github:fastapi/fastapi#10`;
+  (b) latest commit → `github.get_commits` (no `ref` → default branch),
+      cited `github:fastapi/fastapi@50113da` incl. author;
+  (c) tempt-the-tool guardrail — doc-answerable question answers with 0
+      `tool_call` (gate → direct fast path);
+  (d) out-of-domain → verbatim §3.9 refusal, 0 `tool_call`;
+  (e) judge parse-fallback counter — 0 fallback lines across all QA logs.
+- Live QA surfaced 3 fixes (fix(agent) 0f13951 + follow-ups): judge search
+  syntax (`in:issue`→`is:issue`), branch assumption (`ref=main` → omit-ref
+  default), commit-author evidence completeness. Judge parse-fallback counter
+  wired (SPEC §6.3) — `_record_parse_fallback` INFO lines, hermetic tests.
 
 ## 5. phase_4: "Evaluation"
 - status: PLANNED (scope locked 2026-09-07 — SPEC §6)
