@@ -1,0 +1,763 @@
+"""Phase 4 benchmark — classic-vs-agentic comparison (SPEC §6.1).
+
+Runs the **same** question set through both pipelines:
+
+  * **classic** — Phase 1 :func:`docpilot.pipeline_ask.ask` fast path
+    (retrieve → generate → cite, no agent loop, no tool);
+  * **agentic** — Phase 2 :func:`docpilot.agent.pipeline_agentic.agentic_ask`
+    with ``strategy="agentic"`` (forced loop, judge + reformulate + Phase 3
+    GitHub tool when a PAT exists).
+
+Metrics per question (categories: ``docs-answerable`` / ``live-state-answerable``
+/ ``neither``):
+
+  * answer correctness — docs: fraction of gold key facts (verbatim corpus
+    phrasing) contained in the answer body; live: answered **and** the tool
+    fired (0.5 = answered without the tool, 0.0 = refused); neither: 1.0 iff
+    refused (this is the "I don't know" accuracy);
+  * retrieval recall@k — any gold source file present in the offered sources
+    (docs-only, where gold sources exist);
+  * citation validity — body citation markers that resolve inside the offered
+    sources; citation gold accuracy — markers resolving to a gold source
+    (docs-only);
+  * groundedness — external NLI-style audit of the answer against its sources
+    (injectable checker; no LLM call in hermetic tests);
+  * latency, retrieval-call count, tool-call count.
+
+The runner is duck-typed: ``run(question) -> RunOutput``, so hermetic tests
+script every metric without a database or API.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+import sys
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from docpilot.agent.prompts import REFUSE_ANSWER
+from docpilot.agent.types import LoopTraceStep
+
+logger = logging.getLogger(__name__)
+
+VALID_CATEGORIES: frozenset[str] = frozenset(
+    {"docs-answerable", "live-state-answerable", "neither"}
+)
+BODY_FOOTER_SEP = "\nSources:"
+_DATASET_PATH = Path(__file__).resolve().parent / "dataset" / "benchmark.json"
+_REPORTS_DIR = Path(__file__).resolve().parent / "reports"
+_MARKER_RE = re.compile(r"\[(\d+)\]")
+
+GROUNDEDNESS_SYSTEM: str = (
+    "You audit whether the factual claims in an ANSWER are supported by the "
+    "provided SOURCES. If any claim goes beyond the sources or contradicts "
+    "them, mark grounded=false and list the offending claims.\n"
+    'Reply with ONLY a JSON object: {"grounded": true or false, '
+    '"unsupported_claims": ["..."]}.\n'
+)
+
+
+@dataclass(frozen=True)
+class BenchmarkQuestion:
+    """One gold-labeled benchmark question (SPEC §6.1)."""
+
+    id: str
+    category: str
+    question: str
+    gold_key_facts: tuple[str, ...]
+    gold_sources: tuple[str, ...]
+    gold_refusal: bool
+    expected_tool: str | None
+    note: str = ""
+
+
+@dataclass
+class RunOutput:
+    """What a pipeline produced for one question (duck-typed runner result)."""
+
+    answer: str
+    source_files: list[str]
+    refused: bool
+    trace_steps: list[LoopTraceStep] = field(default_factory=list)
+    latency_ms: float = 0.0
+
+
+@dataclass
+class BenchmarkRow:
+    """One question scored under one pipeline."""
+
+    id: str
+    category: str
+    gold_refusal: bool
+    refused: bool
+    answer: str
+    source_files: list[str]
+    retrieval_calls: int
+    tool_calls: int
+    latency_ms: float
+    answer_correct: float
+    recall: float | None
+    citation_validity: float | None
+    citation_gold_accuracy: float | None
+    marker_count: int
+    grounded: bool | None
+
+
+@dataclass
+class PipelineMetrics:
+    """Aggregated §6.1 metrics for one pipeline over the benchmark."""
+
+    answer_correctness: float
+    retrieval_recall_at_k: float | None
+    recall_n: int
+    citation_validity: float | None
+    citation_validity_n: int
+    citation_gold_accuracy: float | None
+    citation_gold_n: int
+    refusal_accuracy: float | None
+    refusal_n: int
+    groundedness_rate: float | None
+    groundedness_n: int
+    avg_latency_ms: float
+    avg_retrieval_calls: float
+    avg_tool_calls: float
+    total_tool_calls: int
+
+
+@dataclass
+class PipelineReport:
+    """One pipeline's full scored run."""
+
+    pipeline: str
+    dataset_path: str
+    generated_at: str
+    rows: list[BenchmarkRow]
+    metrics: PipelineMetrics
+    note: str = ""
+
+
+@dataclass
+class ComparisonRow:
+    """One §6.1 metric compared across the two pipelines."""
+
+    metric: str
+    classic: float | None
+    agentic: float | None
+    winner: str  # "classic" | "agentic" | "tie" | "n/a"
+    direction: str  # "higher" | "lower"
+
+
+@dataclass
+class ComparisonReport:
+    """The §6.1 one-table comparison."""
+
+    metrics: list[ComparisonRow]
+    summary: str
+
+
+# ---------------------------------------------------------------------------
+# Loading
+# ---------------------------------------------------------------------------
+
+
+def load_benchmark(path: str | Path) -> list[BenchmarkQuestion]:
+    """Load and schema-validate the benchmark question set.
+
+    Raises:
+        ValueError: On any schema violation.
+    """
+    path = Path(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        rows = payload.get("questions")
+        if not isinstance(rows, list):
+            raise ValueError("benchmark dataset must be a JSON array or {questions: [...]}")
+    elif isinstance(payload, list):
+        rows = payload
+    else:
+        raise ValueError("benchmark dataset must be a JSON array or {questions: [...]}")
+
+    questions: list[BenchmarkQuestion] = []
+    for i, raw in enumerate(rows):
+        qid = raw.get("id")
+        if not isinstance(qid, str) or not qid.strip():
+            raise ValueError(f"benchmark[{i}]: 'id' must be non-empty")
+        category = raw.get("category")
+        if category not in VALID_CATEGORIES:
+            raise ValueError(
+                f"benchmark[{i}] ({qid!r}): bad category {category!r}; "
+                f"expected one of {sorted(VALID_CATEGORIES)}"
+            )
+        if not isinstance(raw.get("question"), str) or not raw["question"].strip():
+            raise ValueError(f"benchmark[{i}] ({qid!r}): 'question' must be non-empty")
+        facts = raw.get("gold_key_facts")
+        if not isinstance(facts, list) or any(not isinstance(f, str) or not f.strip() for f in facts):
+            raise ValueError(
+                f"benchmark[{i}] ({qid!r}): 'gold_key_facts' must be a list of non-empty strings"
+            )
+        sources = raw.get("gold_sources")
+        if not isinstance(sources, list) or any(not isinstance(s, str) or not s.strip() for s in sources):
+            raise ValueError(
+                f"benchmark[{i}] ({qid!r}): 'gold_sources' must be a list of non-empty strings"
+            )
+        gold_refusal = raw.get("gold_refusal")
+        if not isinstance(gold_refusal, bool):
+            raise ValueError(f"benchmark[{i}] ({qid!r}): 'gold_refusal' must be a bool")
+        tool_expected = raw.get("expected_tool")
+        if tool_expected is not None and not isinstance(tool_expected, str):
+            raise ValueError(f"benchmark[{i}] ({qid!r}): 'expected_tool' must be a string")
+        questions.append(
+            BenchmarkQuestion(
+                id=qid,
+                category=category,
+                question=raw["question"],
+                gold_key_facts=tuple(facts),
+                gold_sources=tuple(sources),
+                gold_refusal=gold_refusal,
+                expected_tool=tool_expected,
+                note=str(raw.get("note", "") or ""),
+            )
+        )
+    return questions
+
+
+# ---------------------------------------------------------------------------
+# Answer-body / citation helpers
+# ---------------------------------------------------------------------------
+
+
+def answer_body(display: str) -> str:
+    """Strip the ``Sources:`` footer, leaving the answer body (markers only)."""
+    return display.split(BODY_FOOTER_SEP, 1)[0].strip()
+
+
+def body_markers(body: str) -> list[int]:
+    """All ``[N]`` citation markers in the answer body (ref numbers, in order)."""
+    return [int(m) for m in _MARKER_RE.findall(body)]
+
+
+def _refused(display_or_answer: str) -> bool:
+    """Structural refusal detection (classic path has no flag; check verbatim)."""
+    return REFUSE_ANSWER in display_or_answer
+
+
+# ---------------------------------------------------------------------------
+# Scoring
+# ---------------------------------------------------------------------------
+
+
+def _score_question(
+    q: BenchmarkQuestion,
+    out: RunOutput,
+    body: str,
+    tool_calls: int,
+) -> float:
+    """Answer-correctness semantics per category (see module docstring)."""
+    if q.category == "docs-answerable":
+        facts = q.gold_key_facts
+        if not facts:
+            return 0.0
+        matched = sum(1 for f in facts if f.lower() in body.lower())
+        return matched / len(facts)
+    if q.category == "live-state-answerable":
+        if out.refused:
+            return 0.0
+        return 1.0 if tool_calls >= 1 else 0.5
+    # neither
+    return 1.0 if out.refused else 0.0
+
+
+def run_pipeline(
+    benchmark: list[BenchmarkQuestion],
+    pipeline: str,
+    run,
+    *,
+    grounding_checker=None,
+    generated_at: str | None = None,
+) -> PipelineReport:
+    """Score one pipeline over the benchmark.
+
+    ``run`` is any callable ``(question: str) -> RunOutput``.  Retrieval-call
+    count is ``max(1, search steps)`` (the direct path performs exactly one
+    retrieval but records no search trace step); tool-call count is the number
+    of ``tool_call`` steps.
+
+    ``grounding_checker`` is any callable ``(answer, source_files) -> bool``
+    applied to *answered* rows only (refusals carry no factual claims).
+    """
+    rows: list[BenchmarkRow] = []
+    for q in benchmark:
+        out = run(q.question)
+        body = answer_body(out.answer)
+        markers = body_markers(body)
+
+        retrieval_calls = max(1, sum(1 for s in out.trace_steps if s.step == "search"))
+        tool_calls = sum(1 for s in out.trace_steps if s.step == "tool_call")
+
+        validity = None
+        if markers:
+            validity = sum(1 for m in markers if 1 <= m <= len(out.source_files)) / len(markers)
+        gold_accuracy = None
+        if markers and q.gold_sources:
+            gold_accuracy = sum(
+                1
+                for m in markers
+                if 1 <= m <= len(out.source_files)
+                and out.source_files[m - 1] in q.gold_sources
+            ) / len(markers)
+
+        recall = None
+        if q.gold_sources:
+            recall = 1.0 if any(g in out.source_files for g in q.gold_sources) else 0.0
+
+        answer_correct = _score_question(q, out, body, tool_calls)
+
+        grounded = None
+        if grounding_checker is not None and not out.refused and out.answer.strip():
+            grounded = bool(grounding_checker(out.answer, out.source_files))
+
+        rows.append(
+            BenchmarkRow(
+                id=q.id,
+                category=q.category,
+                gold_refusal=q.gold_refusal,
+                refused=out.refused,
+                answer=out.answer,
+                source_files=out.source_files,
+                retrieval_calls=retrieval_calls,
+                tool_calls=tool_calls,
+                latency_ms=out.latency_ms,
+                answer_correct=answer_correct,
+                recall=recall,
+                citation_validity=validity,
+                citation_gold_accuracy=gold_accuracy,
+                marker_count=len(markers),
+                grounded=grounded,
+            )
+        )
+
+    return _aggregate(rows, pipeline=pipeline, generated_at=generated_at)
+
+
+def _aggregate(
+    rows: list[BenchmarkRow],
+    *,
+    pipeline: str,
+    generated_at: str | None,
+) -> PipelineReport:
+    n = len(rows)
+    docs = [r for r in rows if r.category == "docs-answerable"]
+    live = [r for r in rows if r.category == "live-state-answerable"]
+    neither = [r for r in rows if r.category == "neither"]
+
+    recall_rows = [r for r in docs if r.recall is not None]
+    validity_rows = [r for r in rows if r.citation_validity is not None]
+    gold_rows = [r for r in docs if r.citation_gold_accuracy is not None]
+    grounded_rows = [r for r in rows if r.grounded is not None]
+
+    metrics = PipelineMetrics(
+        answer_correctness=sum(r.answer_correct for r in rows) / n if n else 0.0,
+        retrieval_recall_at_k=(
+            sum(r.recall or 0.0 for r in recall_rows) / len(recall_rows) if recall_rows else None
+        ),
+        recall_n=len(recall_rows),
+        citation_validity=(
+            sum(r.citation_validity for r in validity_rows) / len(validity_rows)
+            if validity_rows
+            else None
+        ),
+        citation_validity_n=len(validity_rows),
+        citation_gold_accuracy=(
+            sum(r.citation_gold_accuracy for r in gold_rows) / len(gold_rows)
+            if gold_rows
+            else None
+        ),
+        citation_gold_n=len(gold_rows),
+        refusal_accuracy=(
+            sum(1 for r in neither if r.gold_refusal == r.refused) / len(neither)
+            if neither
+            else None
+        ),
+        refusal_n=len(neither),
+        groundedness_rate=(
+            sum(1 for r in grounded_rows if r.grounded) / len(grounded_rows)
+            if grounded_rows
+            else None
+        ),
+        groundedness_n=len(grounded_rows),
+        avg_latency_ms=sum(r.latency_ms for r in rows) / n if n else 0.0,
+        avg_retrieval_calls=sum(r.retrieval_calls for r in rows) / n if n else 0.0,
+        avg_tool_calls=sum(r.tool_calls for r in rows) / n if n else 0.0,
+        total_tool_calls=sum(r.tool_calls for r in rows),
+    )
+
+    return PipelineReport(
+        pipeline=pipeline,
+        dataset_path="-",
+        generated_at=generated_at or time.strftime("%Y-%m-%dT%H:%M:%S"),
+        rows=rows,
+        metrics=metrics,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Comparison
+# ---------------------------------------------------------------------------
+
+
+def _winner(classic: float | None, agentic: float | None, direction: str) -> str:
+    if classic is None and agentic is None:
+        return "n/a"
+    if classic is None:
+        return "agentic"
+    if agentic is None:
+        return "classic"
+    eps = 1e-9
+    if abs(classic - agentic) <= eps:
+        return "tie"
+    if direction == "lower":
+        return "classic" if classic < agentic else "agentic"
+    return "classic" if classic > agentic else "agentic"
+
+
+def build_comparison(classic: PipelineReport, agentic: PipelineReport) -> ComparisonReport:
+    """Build the §6.1 one-table comparison (higher-better save latency/calls)."""
+    c, a = classic.metrics, agentic.metrics
+    comparisons = [
+        ComparisonRow("answer_correctness", c.answer_correctness, a.answer_correctness,
+                      _winner(c.answer_correctness, a.answer_correctness, "higher"), "higher"),
+        ComparisonRow("retrieval_recall@k (docs)", c.retrieval_recall_at_k, a.retrieval_recall_at_k,
+                      _winner(c.retrieval_recall_at_k, a.retrieval_recall_at_k, "higher"), "higher"),
+        ComparisonRow("citation_validity", c.citation_validity, a.citation_validity,
+                      _winner(c.citation_validity, a.citation_validity, "higher"), "higher"),
+        ComparisonRow("citation_gold_accuracy (docs)", c.citation_gold_accuracy, a.citation_gold_accuracy,
+                      _winner(c.citation_gold_accuracy, a.citation_gold_accuracy, "higher"), "higher"),
+        ComparisonRow("refusal_accuracy (I-don't-know)", c.refusal_accuracy, a.refusal_accuracy,
+                      _winner(c.refusal_accuracy, a.refusal_accuracy, "higher"), "higher"),
+        ComparisonRow("groundedness_rate", c.groundedness_rate, a.groundedness_rate,
+                      _winner(c.groundedness_rate, a.groundedness_rate, "higher"), "higher"),
+        ComparisonRow("avg_latency_ms", c.avg_latency_ms, a.avg_latency_ms,
+                      _winner(c.avg_latency_ms, a.avg_latency_ms, "lower"), "lower"),
+        ComparisonRow("avg_retrieval_calls", c.avg_retrieval_calls, a.avg_retrieval_calls,
+                      _winner(c.avg_retrieval_calls, a.avg_retrieval_calls, "lower"), "lower"),
+        ComparisonRow("avg_tool_calls", c.avg_tool_calls, a.avg_tool_calls,
+                      _winner(c.avg_tool_calls, a.avg_tool_calls, "lower"), "lower"),
+    ]
+    decided = [r for r in comparisons if r.winner != "n/a"]
+    tally: dict[str, int] = {}
+    for r in decided:
+        if r.winner != "tie":
+            tally[r.winner] = tally.get(r.winner, 0) + 1
+    summary = (
+        f"{tally.get('classic', 0)} classic / {tally.get('agentic', 0)} agentic / "
+        f"{sum(1 for r in decided if r.winner == 'tie')} ties "
+        f"over {len(decided)} decided metrics"
+    )
+    return ComparisonReport(metrics=comparisons, summary=summary)
+
+
+# ---------------------------------------------------------------------------
+# Serialization / formatting
+# ---------------------------------------------------------------------------
+
+
+def _row_to_dict(r: BenchmarkRow) -> dict:
+    return {
+        "id": r.id,
+        "category": r.category,
+        "gold_refusal": r.gold_refusal,
+        "refused": r.refused,
+        "answer_correct": round(r.answer_correct, 4),
+        "recall": None if r.recall is None else round(r.recall, 4),
+        "citation_validity": None if r.citation_validity is None else round(r.citation_validity, 4),
+        "citation_gold_accuracy": (
+            None if r.citation_gold_accuracy is None else round(r.citation_gold_accuracy, 4)
+        ),
+        "marker_count": r.marker_count,
+        "retrieval_calls": r.retrieval_calls,
+        "tool_calls": r.tool_calls,
+        "latency_ms": round(r.latency_ms, 1),
+        "grounded": r.grounded,
+        "answer": r.answer,
+        "source_files": r.source_files,
+    }
+
+
+def _metrics_to_dict(m: PipelineMetrics) -> dict:
+    return {
+        "answer_correctness": round(m.answer_correctness, 4),
+        "retrieval_recall_at_k": None if m.retrieval_recall_at_k is None else round(m.retrieval_recall_at_k, 4),
+        "recall_n": m.recall_n,
+        "citation_validity": None if m.citation_validity is None else round(m.citation_validity, 4),
+        "citation_validity_n": m.citation_validity_n,
+        "citation_gold_accuracy": None if m.citation_gold_accuracy is None else round(m.citation_gold_accuracy, 4),
+        "citation_gold_n": m.citation_gold_n,
+        "refusal_accuracy": None if m.refusal_accuracy is None else round(m.refusal_accuracy, 4),
+        "refusal_n": m.refusal_n,
+        "groundedness_rate": None if m.groundedness_rate is None else round(m.groundedness_rate, 4),
+        "groundedness_n": m.groundedness_n,
+        "avg_latency_ms": round(m.avg_latency_ms, 1),
+        "avg_retrieval_calls": round(m.avg_retrieval_calls, 3),
+        "avg_tool_calls": round(m.avg_tool_calls, 3),
+        "total_tool_calls": m.total_tool_calls,
+    }
+
+
+def report_to_dict(report: PipelineReport) -> dict:
+    return {
+        "pipeline": report.pipeline,
+        "dataset_path": report.dataset_path,
+        "generated_at": report.generated_at,
+        "note": report.note,
+        "metrics": _metrics_to_dict(report.metrics),
+        "rows": [_row_to_dict(r) for r in report.rows],
+    }
+
+
+def comparison_to_dict(cmp: ComparisonReport) -> dict:
+    return {
+        "summary": cmp.summary,
+        "metrics": [
+            {
+                "metric": r.metric,
+                "classic": None if r.classic is None else round(r.classic, 4),
+                "agentic": None if r.agentic is None else round(r.agentic, 4),
+                "winner": r.winner,
+                "direction": r.direction,
+            }
+            for r in cmp.metrics
+        ],
+    }
+
+
+def format_metrics(report: PipelineReport) -> str:
+    m = report.metrics
+    lines = [f"Pipeline: {report.pipeline}", "-" * 52, f"{'metric':<34}{'value':>10}", "-" * 52]
+    entries = [
+        ("answer_correctness", m.answer_correctness),
+        ("retrieval_recall@k (docs)", m.retrieval_recall_at_k),
+        ("citation_validity", m.citation_validity),
+        ("citation_gold_accuracy (docs)", m.citation_gold_accuracy),
+        ("refusal_accuracy (I-don't-know)", m.refusal_accuracy),
+        ("groundedness_rate", m.groundedness_rate),
+        ("avg_latency_ms", m.avg_latency_ms),
+        ("avg_retrieval_calls", m.avg_retrieval_calls),
+        ("avg_tool_calls", m.avg_tool_calls),
+        ("total_tool_calls", float(m.total_tool_calls)),
+    ]
+    for label, value in entries:
+        rendered = f"{value:.4f}" if isinstance(value, float) else str(value)
+        lines.append(f"{label:<34}{rendered:>10}")
+    lines.append("-" * 52)
+    return "\n".join(lines)
+
+
+def format_comparison(cmp: ComparisonReport) -> str:
+    lines = [
+        "Classic vs. agentic — SPEC §6.1 one-table comparison",
+        "-" * 66,
+        f"{'metric':<34}{'classic':>10}{'agentic':>10}  winner",
+        "-" * 66,
+    ]
+    for r in cmp.metrics:
+        c = "–" if r.classic is None else f"{r.classic:.4f}"
+        a = "–" if r.agentic is None else f"{r.agentic:.4f}"
+        lines.append(f"{r.metric:<34}{c:>10}{a:>10}  {r.winner}")
+    lines.append("-" * 66)
+    lines.append(cmp.summary)
+    return "\n".join(lines)
+
+
+def format_report(report: PipelineReport) -> str:
+    lines = [format_metrics(report), ""]
+    for r in report.rows:
+        flags = []
+        if r.category == "neither" and r.refused != r.gold_refusal:
+            flags.append("refused-when-should-answer" if not r.refused else "answered-when-should-refuse")
+        if r.category == "docs-answerable" and r.answer_correct < 1.0:
+            flags.append(f"facts={r.answer_correct:.2f}")
+        if r.category == "live-state-answerable" and r.tool_calls == 0:
+            flags.append("no-tool")
+        if r.recall == 0.0:
+            flags.append("recall-miss")
+        if r.grounded is False:
+            flags.append("ungrounded")
+        if flags:
+            lines.append(f"  ✗ {r.id} [{r.category}]: {'; '.join(flags)}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Groundedness audit (live path only — inject in tests)
+# ---------------------------------------------------------------------------
+
+
+class GroundingChecker:
+    """NLI-style audit of an answer against its offered sources.
+
+    Uses ``Generator.generate`` with :data:`GROUNDEDNESS_SYSTEM` and a tolerant
+    JSON parse; a documented proxy for full entailment scoring. Returns
+    ``True``/``False``, or ``None`` when the audit output is unparseable.
+    """
+
+    def __init__(self, generator=None):
+        from docpilot.generation.generator import GroqGenerator
+
+        self._generator = generator if generator is not None else GroqGenerator()
+
+    def check(self, answer: str, source_files: list[str]) -> bool | None:
+        sources_text = "\n".join(f"[{i + 1}] {f}" for i, f in enumerate(source_files)) or "(none)"
+        prompt = (
+            f"{GROUNDEDNESS_SYSTEM}\n\nSOURCES:\n{sources_text}\n\nANSWER:\n{answer}"
+        )
+        raw = self._generator.generate(prompt)
+        obj = self._parse_json(raw)
+        if not isinstance(obj, dict):
+            return None
+        return obj.get("grounded")
+
+    @staticmethod
+    def _parse_json(text: str) -> dict | None:
+        first = text.find("{")
+        last = text.rfind("}")
+        if first == -1 or last <= first:
+            return None
+        try:
+            obj = json.loads(text[first : last + 1])
+        except json.JSONDecodeError:
+            return None
+        return obj if isinstance(obj, dict) else None
+
+
+# ---------------------------------------------------------------------------
+# Live runners + CLI
+# ---------------------------------------------------------------------------
+
+
+def _classic_run(question: str) -> RunOutput:
+    """Phase 1 fast path (retrieve → generate → cite) with wall-clock timing."""
+    from docpilot.pipeline_ask import ask
+
+    started = time.perf_counter()
+    result = ask(question)
+    latency = (time.perf_counter() - started) * 1000.0
+    return RunOutput(
+        answer=result.display,
+        source_files=[s.file for s in result.sources],
+        refused=_refused(result.display),
+        trace_steps=[],
+        latency_ms=latency,
+    )
+
+
+def _agentic_run(question: str) -> RunOutput:
+    """Phase 2/3 agentic loop (forced) with wall-clock timing and trace counts."""
+    from docpilot.agent.pipeline_agentic import agentic_ask
+
+    started = time.perf_counter()
+    result = agentic_ask(question, strategy="agentic")
+    latency = (time.perf_counter() - started) * 1000.0
+    steps = list(result.trace)
+    return RunOutput(
+        answer=result.answer,
+        source_files=[s.file for s in result.sources],
+        refused=result.refused,
+        trace_steps=steps,
+        latency_ms=latency,
+    )
+
+
+def run_benchmark_live(
+    dataset_path: str | Path | None = None,
+    *,
+    out_dir: str | Path | None = None,
+    run_groundedness: bool = True,
+) -> Path:
+    """Run both pipelines over the benchmark, with the grounding audit live."""
+    dataset_path = Path(dataset_path) if dataset_path else _DATASET_PATH
+    benchmark = load_benchmark(dataset_path)
+    logger.info("Benchmark: %d questions from %s", len(benchmark), dataset_path)
+
+    checker = GroundingChecker() if run_groundedness else None
+    classic = run_pipeline(benchmark, "classic", _classic_run, grounding_checker=checker)
+    agentic = run_pipeline(benchmark, "agentic", _agentic_run, grounding_checker=checker)
+
+    for report in (classic, agentic):
+        report.dataset_path = str(dataset_path)
+        report.note = (
+            f"Live {report.pipeline} (Groq, temp 0); "
+            + ("groundedness audit on" if run_groundedness else "groundedness audit off")
+            + "; docs recall@k over offered sources"
+        )
+
+    cmp = build_comparison(classic, agentic)
+    out_dir = Path(out_dir) if out_dir else _REPORTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    out_path = out_dir / f"benchmark_{stamp}.json"
+    out_path.write_text(
+        json.dumps(
+            {
+                "dataset_path": str(dataset_path),
+                "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "note": "SPEC §6.1 classic-vs-agentic comparison — same question set, both pipelines.",
+                "pipelines": {
+                    classic.pipeline: report_to_dict(classic),
+                    agentic.pipeline: report_to_dict(agentic),
+                },
+                "comparison": comparison_to_dict(cmp),
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    print(format_metrics(classic))
+    print()
+    print(format_metrics(agentic))
+    print()
+    print(format_comparison(cmp))
+    print()
+    print(format_report(classic))
+    print()
+    print(format_report(agentic))
+    logger.info("Benchmark report written to %s", out_path)
+    return out_path
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry: ``python -m docpilot.eval benchmark [--datasets PATH] [--out DIR] [--no-grounding]``."""
+    args = list(argv) if argv is not None else sys.argv[1:]
+    dataset_path: str | Path | None = None
+    out_dir: str | Path | None = None
+    run_groundedness = True
+    i = 0
+    while i < len(args):
+        if args[i] in ("--datasets", "--dataset", "--triples"):
+            i += 1
+            if i >= len(args):
+                print(f"{args[i - 1]} requires a path", file=sys.stderr)
+                return 2
+            dataset_path = args[i]
+        elif args[i] == "--out":
+            i += 1
+            if i >= len(args):
+                print("--out requires a directory", file=sys.stderr)
+                return 2
+            out_dir = args[i]
+        elif args[i] == "--no-grounding":
+            run_groundedness = False
+        else:
+            print(f"unknown argument {args[i]!r}", file=sys.stderr)
+            return 2
+        i += 1
+    run_benchmark_live(dataset_path, out_dir=out_dir, run_groundedness=run_groundedness)
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
