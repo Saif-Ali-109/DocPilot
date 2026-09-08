@@ -1,0 +1,477 @@
+{
+  "dataset_path": "/home/ain/Desktop/RAG/src/docpilot/eval/dataset/judge_triples.json",
+  "triple_count": 24,
+  "generated_at": "2026-09-08T17:49:22",
+  "winner": "tie",
+  "note": "First slice, SPEC \u00a76.2: symmetric one-pass run (same model, temperature=0, same triples).  Adoption decision is the client's call on this data alone.",
+  "prompts": {
+    "A": {
+      "prompt_name": "A",
+      "n": 24,
+      "verdict_accuracy": 1.0,
+      "adversarial_accuracy": 1.0,
+      "parse_failure_rate": 0.0,
+      "parse_failures": [],
+      "per_category": {
+        "sufficient-direct": {
+          "correct": 6,
+          "total": 6,
+          "accuracy": 1.0
+        },
+        "sufficient-partial": {
+          "correct": 6,
+          "total": 6,
+          "accuracy": 1.0
+        },
+        "insufficient-missing": {
+          "correct": 6,
+          "total": 6,
+          "accuracy": 1.0
+        },
+        "adversarial": {
+          "correct": 6,
+          "total": 6,
+          "accuracy": 1.0
+        }
+      },
+      "confusion": {
+        "sufficient": {
+          "sufficient": 15,
+          "insufficient": 0
+        },
+        "insufficient": {
+          "sufficient": 0,
+          "insufficient": 9
+        }
+      },
+      "rows": [
+        {
+          "id": "t01",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t02",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t03",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t04",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t05",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t06",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t07",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t08",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t09",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t10",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t11",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t12",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t13",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t14",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t15",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t16",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t17",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t18",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t19",
+          "category": "adversarial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t20",
+          "category": "adversarial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t21",
+          "category": "adversarial",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t22",
+          "category": "adversarial",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t23",
+          "category": "adversarial",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t24",
+          "category": "adversarial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        }
+      ]
+    },
+    "B": {
+      "prompt_name": "B",
+      "n": 24,
+      "verdict_accuracy": 1.0,
+      "adversarial_accuracy": 1.0,
+      "parse_failure_rate": 0.0,
+      "parse_failures": [],
+      "per_category": {
+        "sufficient-direct": {
+          "correct": 6,
+          "total": 6,
+          "accuracy": 1.0
+        },
+        "sufficient-partial": {
+          "correct": 6,
+          "total": 6,
+          "accuracy": 1.0
+        },
+        "insufficient-missing": {
+          "correct": 6,
+          "total": 6,
+          "accuracy": 1.0
+        },
+        "adversarial": {
+          "correct": 6,
+          "total": 6,
+          "accuracy": 1.0
+        }
+      },
+      "confusion": {
+        "sufficient": {
+          "sufficient": 15,
+          "insufficient": 0
+        },
+        "insufficient": {
+          "sufficient": 0,
+          "insufficient": 9
+        }
+      },
+      "rows": [
+        {
+          "id": "t01",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t02",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t03",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t04",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t05",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t06",
+          "category": "sufficient-direct",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t07",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t08",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t09",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t10",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t11",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t12",
+          "category": "sufficient-partial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t13",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t14",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t15",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t16",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t17",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t18",
+          "category": "insufficient-missing",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t19",
+          "category": "adversarial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t20",
+          "category": "adversarial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t21",
+          "category": "adversarial",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t22",
+          "category": "adversarial",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t23",
+          "category": "adversarial",
+          "gold": "insufficient",
+          "predicted": "insufficient",
+          "correct": true,
+          "parse_fallback": false
+        },
+        {
+          "id": "t24",
+          "category": "adversarial",
+          "gold": "sufficient",
+          "predicted": "sufficient",
+          "correct": true,
+          "parse_fallback": false
+        }
+      ]
+    }
+  }
+}

@@ -546,7 +546,8 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
   wired (SPEC §6.3) — `_record_parse_fallback` INFO lines, hermetic tests.
 
 ## 5. phase_4: "Evaluation"
-- status: PLANNED (scope locked 2026-09-07 — SPEC §6)
+- status: IN PROGRESS (2026-09-08) — slice 1 (judge two-prompt A/B) complete;
+  next: benchmark classic-vs-agentic comparison + false-refusal decomposition
 - summary: >
     Build a benchmark dataset and track: retrieval quality, answer correctness,
     citation correctness, groundedness/hallucination rate, "I don't know"
@@ -560,11 +561,31 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
     adversarial paraphrases + parse-failure rate); tool-necessity eval
     (docs-answerable / live-state-answerable / neither → false pos/neg rates);
     judge two-prompt A/B as the first slice.
+
+### 5.1 slice_1 judge two-prompt A/B (2026-09-08 — complete)
+- dataset: `src/docpilot/eval/dataset/judge_triples.json` — 24 labeled verdict
+  triples (real FastAPI-corpus contexts; 15 sufficient / 9 insufficient;
+  categories sufficient-direct / sufficient-partial / insufficient-missing /
+  adversarial ×6 each). Root `data/` is git-ignored, so the SPEC-mandated
+  committed dataset ships in-package.
+- harness: `src/docpilot/eval/judge_ab.py` + `python -m docpilot.eval`; judge
+  gains optional `system_prompt` (prompt-B pressure test of the
+  `SufficiencyJudge` interface). Prompt B = decision-procedure variant,
+  contract-compatible (same JSON keys, lean-sufficient policy, live-validated
+  Phase 3 tool rules). 20 new hermetic tests; suite 256 passed.
+- result (live Groq, temp 0, symmetric one-pass): **A and B both 1.000
+  verdict accuracy, 1.000 adversarial accuracy, 0.000 parse-failure rate —
+  tie on every metric, zero parse fallbacks** (report
+  `src/docpilot/eval/reports/judge_ab_20260908_174922.json`).
+- decision: production judge keeps **Prompt A** (the live-QA-validated
+  prompt). Nothing to adopt from B on this seed; the tie is a ceiling effect
+  on a 24-triple set — enrichment with harder adversarial + the tool tri-class
+  set is the next pressure test, not a prompt swap.
 - known_open_questions: >
     Phase 2 seeds 4/6 refusals may be false refusals (retrieval failed, judge
     honest) — resolved via the decomposition eval, not ad hoc retries.
     Parse-fallback default (sufficient) stays pending Phase 4 flip-condition
-    data (SPEC §6.3).
+    data (SPEC §6.3); slice 1 measured 0 parse fallbacks on the labeled set.
 
 ## 6. phase_5: "API + UI"
 - status: PLANNED
