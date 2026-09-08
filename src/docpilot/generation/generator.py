@@ -7,6 +7,7 @@ import random
 import re
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from docpilot import config
 from docpilot.generation.prompts import SYSTEM_PROMPT
@@ -18,6 +19,29 @@ logger = logging.getLogger(__name__)
 # huge TPD wait (minutes) is capped so the daily wall fails fast instead of
 # hanging the retry loop for ~3× the advertised wait.
 _RETRY_AFTER_MAX_SECONDS = 10.0
+
+
+def _int_header(headers, name: str) -> int | None:
+    """Parse an integer response header (Groq's x-ratelimit-* values)."""
+    val = headers.get(name)
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
+
+
+@dataclass(frozen=True)
+class ProbeResult:
+    """Outcome of a one-call quota headroom probe (Groq x-ratelimit-* headers)."""
+
+    ok: bool
+    completion: str | None = None
+    limit: int | None = None
+    used: int | None = None
+    remaining: int | None = None
+    reason: str = ""
 
 
 class Generator(ABC):
@@ -120,6 +144,32 @@ class GroqGenerator(Generator):
 
         # Exhausted all retries
         raise last_exc  # type: ignore[misc]
+
+    def probe(self) -> ProbeResult:
+        """One minimal completions call that reads the org's token quota from
+        the ``x-ratelimit-*`` response headers.
+
+        A tiny call can succeed inside a nearly exhausted daily bucket, so a
+        plain success is NOT proof of headroom — the headers are the gate
+        (SPEC §6.5). Single attempt, no retries.
+        """
+        try:
+            raw = self._client.chat.completions.with_raw_response.create(
+                model=self._model,
+                messages=[{"role": "system", "content": "Reply exactly OK."}],
+                temperature=0,
+            )
+            headers = getattr(raw, "headers", None) or {}
+            content = raw.parse().choices[0].message.content.strip()  # type: ignore[union-attr]
+            return ProbeResult(
+                ok=True,
+                completion=content,
+                limit=_int_header(headers, "x-ratelimit-limit-tokens"),
+                used=_int_header(headers, "x-ratelimit-used-tokens"),
+                remaining=_int_header(headers, "x-ratelimit-remaining-tokens"),
+            )
+        except Exception as exc:  # noqa: BLE001 - any failure becomes a verdict
+            return ProbeResult(ok=False, reason=f"{type(exc).__name__}: {exc}")
 
     # ------------------------------------------------------------------
     # Helpers

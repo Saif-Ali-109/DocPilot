@@ -872,33 +872,44 @@ def merge_benchmark_checkpoints(out_dir: str | Path, stamp: str) -> Path:
     return out_path
 
 
-def probe_quota() -> int:
-    """Headroom probe: one tiny completions call against the configured model.
+def probe_quota(min_remaining: int = 100_000) -> int:
+    """Headroom probe: one tiny completions call that reads the org's token
+    quota from the ``x-ratelimit-*`` response headers.
 
-    Returns 0 when the model answers (quota OK), 1 when rate-limited (prints
-    the Limit/Used figures Groq reports), 2 on any other failure. Live runs
-    are gated on ``--probe && …`` so an exhausted org is detected up front
-    instead of after a ~40-minute dead run (SPEC §6.5).
+    Returns 0 when the org has real headroom (≥ ``min_remaining`` tokens — a
+    pipeline half burns ~60–100k), 1 when rate-limited OR when remaining
+    headroom is below the gate, 2 on any other failure. Live runs are gated
+    on ``--probe && …`` so an exhausted org is detected up front instead of
+    after a dead run (SPEC §6.5).
     """
     from docpilot.generation.generator import GroqGenerator
 
     gen = GroqGenerator(max_retries=1)
     print(f"probe: model={gen._model}")
-    try:
-        completion = gen.generate("Reply exactly OK.")
-    except Exception as exc:  # noqa: BLE001 - any failure must surface as a verdict
-        status = getattr(exc, "status_code", None)
-        body = str(getattr(exc, "message", "") or exc)
-        if status == 429:
-            m = re.search(r"Limit (\d+), Used (\d+)", body)
+    result = gen.probe()
+    if not result.ok:
+        reason = result.reason
+        if "Rate limit" in reason or "429" in reason:
+            m = re.search(r"Limit (\d+), Used (\d+)", reason)
             if m:
                 print(f"probe: RATE LIMITED — Limit={m.group(1)} Used={m.group(2)}")
             else:
-                print(f"probe: RATE LIMITED — {body[:200]}")
+                print(f"probe: RATE LIMITED — {reason[:200]}")
             return 1
-        print(f"probe: FAILED ({status or type(exc).__name__}) — {body[:200]}")
+        print(f"probe: FAILED ({reason[:200]})")
         return 2
-    print(f"probe: OK — completion={completion[:40]!r}")
+    tail = f" (limit={result.limit})" if result.limit is not None else ""
+    print(
+        f"probe: OK — completion={result.completion[:40]!r}, "
+        f"tokens remaining={result.remaining}{tail}"
+    )
+    if result.remaining is not None and result.remaining < min_remaining:
+        print(
+            f"probe: GATE FAIL — remaining {result.remaining} < {min_remaining}: "
+            "a pipeline half burns ~60–100k tokens, so this org cannot finish "
+            "a half safely."
+        )
+        return 1
     return 0
 
 

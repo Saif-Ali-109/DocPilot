@@ -658,9 +658,13 @@ protocol, locked:
   `--merge DIR STAMP` merges two existing sidecars. Granularity is per
   pipeline — a crashed half reruns wholesale; per-question resume is not in
   scope.
-- **Probe before launch.** Live runs are gated on a `--probe` headroom check
-  (one tiny completions call) so a quota-exhausted org is detected up front
-  instead of after a ~40-minute dead run.
+- **Probe before launch.** Live runs are gated on a `--probe` headroom check so
+  a quota-exhausted org is detected up front instead of after a ~40-minute dead
+  run. The probe reads the org's `x-ratelimit-*` token headers on a successful
+  tiny call, not just the call's success — a tiny call fits inside a nearly
+  exhausted bucket (observed live: probe OK at ~500 tokens headroom, then the
+  first 2.7k-token answer call hit the daily wall), so the gate is
+  remaining-tokens ≥ ~100k, roughly a full pipeline half.
 - **429 self-healing.** The generator honors the server's `retry-after` on
   rate-limit errors (bounded), so per-minute bursts recover; a daily-cap wall
   fails fast instead of hanging retries.

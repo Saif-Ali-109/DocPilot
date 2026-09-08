@@ -633,51 +633,96 @@ class TestCheckpoints:
 
 
 class TestProbe:
-    """probe_quota(): 0 = OK, 1 = rate-limited (prints Limit/Used), 2 = other."""
+    """probe_quota(): 0 = headroom OK, 1 = rate-limited / below gate, 2 = other."""
 
-    def _patch_generator(self, monkeypatch, gen_cls):
-        import types
-
+    def _patch_probe(self, monkeypatch, result_fn):
         class _FakeGen:
             def __init__(self, **kwargs):
                 self._model = "probe-model"
 
-            def generate(self, prompt):  # noqa: ARG002
-                return gen_cls()  # callback raises or returns
+            def probe(self):
+                return result_fn()
 
         monkeypatch.setattr("docpilot.generation.generator.GroqGenerator", _FakeGen)
 
-    def test_probe_ok_returns_zero(self, monkeypatch, capsys):
-        self._patch_generator(monkeypatch, lambda: "OK")
+    def test_probe_ok_with_headroom_returns_zero(self, monkeypatch, capsys):
+        from docpilot.generation.generator import ProbeResult
+
+        self._patch_probe(
+            monkeypatch,
+            lambda: ProbeResult(
+                ok=True,
+                completion="OK",
+                limit=200000,
+                used=50000,
+                remaining=150000,
+            ),
+        )
         assert bm.probe_quota() == 0
-        assert "probe: OK" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "probe: OK" in out
+        assert "tokens remaining=150000" in out
 
     def test_probe_rate_limited_prints_limit_used(self, monkeypatch, capsys):
-        import types
+        from docpilot.generation.generator import ProbeResult
 
-        class _RateLimited(Exception):
-            def __init__(self):
-                super().__init__("Rate limit reached ... Limit 200000, Used 199443, Requested 2430")
-                self.message = "Rate limit reached ... Limit 200000, Used 199443, Requested 2430"
-                self.status_code = 429
-                self.response = types.SimpleNamespace(headers={})
-
-        self._patch_generator(monkeypatch, lambda: (_ for _ in ()).throw(_RateLimited()))
+        self._patch_probe(
+            monkeypatch,
+            lambda: ProbeResult(
+                ok=False,
+                reason=(
+                    "RateLimitError: Rate limit reached for model "
+                    "`openai/gpt-oss-20b` on tokens per day (TPD): "
+                    "Limit 200000, Used 199455, Requested 2700. Please try "
+                    "again in 15m30.96s."
+                ),
+            ),
+        )
         assert bm.probe_quota() == 1
         out = capsys.readouterr().out
         assert "RATE LIMITED" in out
-        assert "Limit=200000 Used=199443" in out
+        assert "Limit=200000 Used=199455" in out
+
+    def test_probe_ok_but_below_gate_returns_one(self, monkeypatch, capsys):
+        from docpilot.generation.generator import ProbeResult
+
+        # 25k remaining looks healthy to a tiny call, but a half needs ~60-100k.
+        self._patch_probe(
+            monkeypatch,
+            lambda: ProbeResult(
+                ok=True,
+                completion="OK",
+                limit=200000,
+                used=175000,
+                remaining=25000,
+            ),
+        )
+        assert bm.probe_quota() == 1
+        out = capsys.readouterr().out
+        assert "GATE FAIL" in out
+        assert "remaining 25000 < 100000" in out
+
+    def test_probe_missing_headers_default_ok(self, monkeypatch, capsys):
+        from docpilot.generation.generator import ProbeResult
+
+        # No x-ratelimit headers: fall back to "answered = have headroom".
+        self._patch_probe(
+            monkeypatch,
+            lambda: ProbeResult(ok=True, completion="OK"),
+        )
+        assert bm.probe_quota() == 0
+        out = capsys.readouterr().out
+        assert "tokens remaining=None" in out
 
     def test_probe_other_error_returns_two(self, monkeypatch, capsys):
-        class _AuthError(Exception):
-            def __init__(self):
-                super().__init__("401 invalid key")
-                self.message = "401 invalid key"
-                self.status_code = 401
+        from docpilot.generation.generator import ProbeResult
 
-        self._patch_generator(monkeypatch, lambda: (_ for _ in ()).throw(_AuthError()))
+        self._patch_probe(
+            monkeypatch,
+            lambda: ProbeResult(ok=False, reason="AuthenticationError: 401 invalid key"),
+        )
         assert bm.probe_quota() == 2
-        assert "FAILED (401)" in capsys.readouterr().out
+        assert "FAILED (AuthenticationError: 401 invalid key)" in capsys.readouterr().out
 
     def test_cli_probe_flag_returns_probe_code(self, monkeypatch):
         monkeypatch.setattr(bm, "probe_quota", lambda: 1)

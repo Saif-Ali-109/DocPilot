@@ -675,6 +675,14 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
 - agreed insurance (user sign-off → SPEC §6.5): generator honors server
   `retry-after` on 429 (self-heals TPM bursts) + `--probe` headroom gate
   before launch. L3 per-question checkpointing considered and declined for now.
+- live-run log 2026-09-08 (evening): first agentic-resume attempt after the
+  swap crashed on the SAME daily wall — org `org_01m20m0fsdezntz1sgqpmdzfm2`,
+  Used 199455/200000, first answer call Requested 2700. Root cause: the swap
+  landed on the same org's bucket (Used 199455 vs 199443 at the original
+  crash), and the then-current probe passed because a tiny call fit the ~300
+  remaining tokens. Fixed: probe now reads `x-ratelimit-*` headers and gates on
+  remaining ≥ ~100k (commit pending). Resume reruns wholesale under stamp
+  190539 once a genuinely fresh org / upgraded tier key is in place.
 - follow-up: token accounting — generator discards Groq `usage`; record
   per-call tokens in reports so quota economics are inspectable.
 - exit_criteria_progress: §6.4 "classic-vs-agentic comparison" → in progress

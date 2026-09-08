@@ -176,3 +176,106 @@ class TestGenerateRetry:
         monkeypatch.setattr("docpilot.generation.generator.time.sleep", sleeps.append)
         assert _gen(["OK"], max_retries=3).generate("hi") == "OK"
         assert sleeps == []
+
+
+# ---------------------------------------------------------------------------
+# probe() — reads x-ratelimit-* headers so a tiny call can't mask a
+# nearly-exhausted daily bucket (SPEC §6.5)
+# ---------------------------------------------------------------------------
+
+
+class _RawResponse:
+    def __init__(self, headers, content):
+        self.headers = headers
+        self._content = content
+
+    def parse(self):
+        return types.SimpleNamespace(
+            choices=[
+                types.SimpleNamespace(message=types.SimpleNamespace(content=self._content))
+            ]
+        )
+
+
+class _WithRaw:
+    def __init__(self, responses):
+        self._responses = list(responses)
+
+    def create(self, **kwargs):  # noqa: ARG002 - fake API surface
+        r = self._responses.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+
+class _RawCompletions:
+    def __init__(self, responses):
+        self._with = _WithRaw(responses)
+
+    @property
+    def with_raw_response(self):
+        return self._with
+
+
+def _probe_gen(responses, api_key="test-key", model="test-model") -> GroqGenerator:
+    gen = GroqGenerator(api_key=api_key, model=model, max_retries=1)
+    gen._client = types.SimpleNamespace(  # noqa: SLF001 - test seam
+        chat=types.SimpleNamespace(completions=_RawCompletions(responses))
+    )
+    return gen
+
+
+class TestProbe:
+    def test_reads_headers_on_success(self):
+        gen = _probe_gen(
+            [
+                _RawResponse(
+                    headers={
+                        "x-ratelimit-limit-tokens": "200000",
+                        "x-ratelimit-used-tokens": "50000",
+                        "x-ratelimit-remaining-tokens": "150000",
+                    },
+                    content="OK",
+                )
+            ]
+        )
+        res = gen.probe()
+        assert res.ok
+        assert res.completion == "OK"
+        assert res.limit == 200000
+        assert res.used == 50000
+        assert res.remaining == 150000
+
+    def test_missing_headers_default_to_none(self):
+        res = _probe_gen([_RawResponse(headers={}, content="OK")]).probe()
+        assert res.ok
+        assert res.remaining is None
+        assert res.limit is None
+        assert res.used is None
+
+    def test_non_numeric_header_becomes_none(self):
+        res = _probe_gen(
+            [
+                _RawResponse(
+                    headers={"x-ratelimit-remaining-tokens": "lots"},
+                    content="OK",
+                )
+            ]
+        ).probe()
+        assert res.ok
+        assert res.remaining is None
+
+    def test_rate_limited_returns_failed_result(self):
+        res = _probe_gen(
+            [_FakeRateLimit("Rate limit reached ... Limit 200000, Used 199455", retry_after=None)]
+        ).probe()
+        assert not res.ok
+        assert "Rate limit reached" in res.reason
+
+    def test_other_error_is_failed_result(self):
+        class _BadKey(Exception):
+            pass
+
+        res = _probe_gen([_BadKey("401 invalid key")]).probe()
+        assert not res.ok
+        assert "_BadKey" in res.reason
