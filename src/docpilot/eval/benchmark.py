@@ -619,6 +619,10 @@ class GroundingChecker:
             return None
         return obj.get("grounded")
 
+    def __call__(self, answer: str, source_files: list[str]) -> bool | None:
+        """Duck-typed callable form used by :func:`run_pipeline`."""
+        return self.check(answer, source_files)
+
     @staticmethod
     def _parse_json(text: str) -> dict | None:
         first = text.find("{")
@@ -670,71 +674,191 @@ def _agentic_run(question: str) -> RunOutput:
     )
 
 
+_PIPELINE_CHOICES = ("classic", "agentic", "both")
+
+
+def _write_pipeline_file(out_dir: Path, stamp: str, report: PipelineReport) -> Path:
+    """Persist one pipeline's scored run immediately (crash-safe sidecar)."""
+    p = out_dir / f"benchmark_{stamp}_{report.pipeline}.json"
+    p.write_text(
+        json.dumps(report_to_dict(report), indent=2) + "\n", encoding="utf-8"
+    )
+    return p
+
+
+def _load_pipeline_file(path: Path, pipeline: str) -> PipelineReport:
+    """Rebuild a PipelineReport from a sidecar file (for resume/merge)."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    m = payload["metrics"]
+    metrics = PipelineMetrics(
+        answer_correctness=m["answer_correctness"],
+        retrieval_recall_at_k=m.get("retrieval_recall_at_k"),
+        recall_n=m.get("recall_n", 0),
+        citation_validity=m.get("citation_validity"),
+        citation_validity_n=m.get("citation_validity_n", 0),
+        citation_gold_accuracy=m.get("citation_gold_accuracy"),
+        citation_gold_n=m.get("citation_gold_n", 0),
+        refusal_accuracy=m.get("refusal_accuracy"),
+        refusal_n=m.get("refusal_n", 0),
+        groundedness_rate=m.get("groundedness_rate"),
+        groundedness_n=m.get("groundedness_n", 0),
+        avg_latency_ms=m["avg_latency_ms"],
+        avg_retrieval_calls=m["avg_retrieval_calls"],
+        avg_tool_calls=m["avg_tool_calls"],
+        total_tool_calls=m.get("total_tool_calls", 0),
+    )
+    rows = [
+        BenchmarkRow(
+            id=r["id"],
+            category=r["category"],
+            gold_refusal=r["gold_refusal"],
+            refused=r["refused"],
+            answer=r["answer"],
+            source_files=r["source_files"],
+            retrieval_calls=r["retrieval_calls"],
+            tool_calls=r["tool_calls"],
+            latency_ms=r["latency_ms"],
+            answer_correct=r["answer_correct"],
+            recall=r.get("recall"),
+            citation_validity=r.get("citation_validity"),
+            citation_gold_accuracy=r.get("citation_gold_accuracy"),
+            marker_count=r["marker_count"],
+            grounded=r.get("grounded"),
+        )
+        for r in payload["rows"]
+    ]
+    return PipelineReport(
+        pipeline=pipeline,
+        dataset_path=payload.get("dataset_path", "-"),
+        generated_at=payload.get("generated_at", "-"),
+        rows=rows,
+        metrics=metrics,
+        note=payload.get("note", ""),
+    )
+
+
+def _combined_json(
+    dataset_path: Path,
+    reports: dict[str, PipelineReport],
+    *,
+    partial: bool,
+) -> dict:
+    cmp = None if partial else build_comparison(reports["classic"], reports["agentic"])
+    note = (
+        "SPEC §6.1 classic-vs-agentic comparison — same question set, both pipelines."
+        if not partial
+        else "PARTIAL — only "
+        + ", ".join(sorted(reports))
+        + " written (missing "
+        + ", ".join(sorted(set(_PIPELINE_CHOICES) - {"both"} - set(reports)))
+        + "); rerun the missing half with --pipeline and merge."
+    )
+    return {
+        "dataset_path": str(dataset_path),
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "note": note,
+        "pipelines": {name: report_to_dict(r) for name, r in reports.items()},
+        "comparison": comparison_to_dict(cmp) if cmp else None,
+    }
+
+
 def run_benchmark_live(
     dataset_path: str | Path | None = None,
     *,
     out_dir: str | Path | None = None,
     run_groundedness: bool = True,
+    pipeline: str = "both",
 ) -> Path:
-    """Run both pipelines over the benchmark, with the grounding audit live."""
+    """Run the selected pipeline(s) over the benchmark, checkpointing each half.
+
+    Each pipeline's report is persisted to a sidecar file as soon as it
+    completes, so a quota/failure mid-run never loses the finished half; the
+    combined file + comparison is written only when both sides are present.
+    """
+    if pipeline not in _PIPELINE_CHOICES:
+        raise ValueError(
+            f"pipeline must be one of {_PIPELINE_CHOICES}; got {pipeline!r}"
+        )
     dataset_path = Path(dataset_path) if dataset_path else _DATASET_PATH
     benchmark = load_benchmark(dataset_path)
+    out_dir = Path(out_dir) if out_dir else _REPORTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M%S")
     logger.info("Benchmark: %d questions from %s", len(benchmark), dataset_path)
 
     checker = GroundingChecker() if run_groundedness else None
-    classic = run_pipeline(benchmark, "classic", _classic_run, grounding_checker=checker)
-    agentic = run_pipeline(benchmark, "agentic", _agentic_run, grounding_checker=checker)
-
-    for report in (classic, agentic):
+    reports: dict[str, PipelineReport] = {}
+    for name in ("classic", "agentic"):
+        if pipeline not in ("both", name):
+            continue
+        run = _classic_run if name == "classic" else _agentic_run
+        report = run_pipeline(benchmark, name, run, grounding_checker=checker)
         report.dataset_path = str(dataset_path)
         report.note = (
             f"Live {report.pipeline} (Groq, temp 0); "
             + ("groundedness audit on" if run_groundedness else "groundedness audit off")
             + "; docs recall@k over offered sources"
         )
+        sidecar = _write_pipeline_file(out_dir, stamp, report)
+        reports[name] = report
+        logger.info("Benchmark %s pipeline complete → %s", name, sidecar)
+        print(format_metrics(report))
+        print()
 
-    cmp = build_comparison(classic, agentic)
-    out_dir = Path(out_dir) if out_dir else _REPORTS_DIR
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime("%Y%m%d_%H%M%S")
+    partial = len(reports) < 2
     out_path = out_dir / f"benchmark_{stamp}.json"
     out_path.write_text(
-        json.dumps(
-            {
-                "dataset_path": str(dataset_path),
-                "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                "note": "SPEC §6.1 classic-vs-agentic comparison — same question set, both pipelines.",
-                "pipelines": {
-                    classic.pipeline: report_to_dict(classic),
-                    agentic.pipeline: report_to_dict(agentic),
-                },
-                "comparison": comparison_to_dict(cmp),
-            },
-            indent=2,
-        )
+        json.dumps(_combined_json(dataset_path, reports, partial=partial), indent=2)
         + "\n",
         encoding="utf-8",
     )
 
-    print(format_metrics(classic))
-    print()
-    print(format_metrics(agentic))
-    print()
-    print(format_comparison(cmp))
-    print()
-    print(format_report(classic))
-    print()
-    print(format_report(agentic))
+    if partial:
+        missing = sorted(set(_PIPELINE_CHOICES) - {"both"} - set(reports))
+        print(
+            f"⚠ PARTIAL — {sorted(reports)} done, {missing} missing; "
+            f"rerun with --pipeline {missing[0]} to resume, then merge."
+        )
+        print(format_report(next(iter(reports.values()))))
+    else:
+        cmp = build_comparison(reports["classic"], reports["agentic"])
+        print(format_comparison(cmp))
+        print()
+        print(format_report(reports["classic"]))
+        print()
+        print(format_report(reports["agentic"]))
     logger.info("Benchmark report written to %s", out_path)
     return out_path
 
 
+def merge_benchmark_checkpoints(out_dir: str | Path, stamp: str) -> Path:
+    """Merge the two sidecar files of *stamp* into the combined report."""
+    out_dir = Path(out_dir)
+    files = {p: out_dir / f"benchmark_{stamp}_{p}.json" for p in ("classic", "agentic")}
+    missing = [p for p, f in files.items() if not f.exists()]
+    if missing:
+        raise FileNotFoundError(
+            f"missing sidecar(s) {missing} for stamp {stamp!r} in {out_dir}"
+        )
+    reports = {
+        p: _load_pipeline_file(f, p) for p, f in files.items()
+    }
+    payload = _combined_json(Path(reports["classic"].dataset_path), reports, partial=False)
+    out_path = out_dir / f"benchmark_{stamp}.json"
+    out_path.write_text(
+        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+    )
+    logger.info("Merged benchmark checkpoints → %s", out_path)
+    return out_path
+
+
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry: ``python -m docpilot.eval benchmark [--datasets PATH] [--out DIR] [--no-grounding]``."""
+    """CLI: ``python -m docpilot.eval benchmark [--dataset PATH] [--out DIR] [--no-grounding] [--pipeline {classic,agentic,both}] [--merge DIR STAMP]``."""
     args = list(argv) if argv is not None else sys.argv[1:]
     dataset_path: str | Path | None = None
     out_dir: str | Path | None = None
     run_groundedness = True
+    pipeline: str = "both"
     i = 0
     while i < len(args):
         if args[i] in ("--datasets", "--dataset", "--triples"):
@@ -751,11 +875,29 @@ def main(argv: list[str] | None = None) -> int:
             out_dir = args[i]
         elif args[i] == "--no-grounding":
             run_groundedness = False
+        elif args[i] == "--pipeline":
+            i += 1
+            if i >= len(args) or args[i] not in _PIPELINE_CHOICES:
+                print(f"--pipeline requires one of {_PIPELINE_CHOICES}", file=sys.stderr)
+                return 2
+            pipeline = args[i]
+        elif args[i] == "--merge":
+            i += 1
+            if i + 1 >= len(args):
+                print("--merge requires DIR and STAMP", file=sys.stderr)
+                return 2
+            merge_benchmark_checkpoints(args[i], args[i + 1])
+            return 0
         else:
             print(f"unknown argument {args[i]!r}", file=sys.stderr)
             return 2
         i += 1
-    run_benchmark_live(dataset_path, out_dir=out_dir, run_groundedness=run_groundedness)
+    run_benchmark_live(
+        dataset_path,
+        out_dir=out_dir,
+        run_groundedness=run_groundedness,
+        pipeline=pipeline,
+    )
     return 0
 
 

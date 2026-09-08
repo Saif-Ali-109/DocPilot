@@ -465,6 +465,12 @@ class TestGroundingChecker:
         checker = bm.GroundingChecker(TestGroundingChecker.StubGenerator("not json at all"))
         assert checker.check("answer", ["file.md"]) is None
 
+    def test_callable_form(self):
+        checker = bm.GroundingChecker(
+            TestGroundingChecker.StubGenerator('{"grounded": true, "unsupported_claims": []}')
+        )
+        assert checker("answer", ["file.md"]) is True
+
 
 # ---------------------------------------------------------------------------
 # CLI dispatch
@@ -481,15 +487,16 @@ class TestCLI:
     def test_dispatches_live_run(self, monkeypatch):
         called = {}
 
-        def fake(dataset_path=None, *, out_dir=None, run_groundedness=True):
+        def fake(dataset_path=None, *, out_dir=None, run_groundedness=True, pipeline="both"):
             called["path"] = dataset_path
             called["out"] = out_dir
             called["grounding"] = run_groundedness
+            called["pipeline"] = pipeline
             return "fake"
 
         monkeypatch.setattr(bm, "run_benchmark_live", fake)
         assert main(["--dataset", "b.json", "--out", "/tmp/opencode/out", "--no-grounding"]) == 0
-        assert called == {"path": "b.json", "out": "/tmp/opencode/out", "grounding": False}
+        assert called == {"path": "b.json", "out": "/tmp/opencode/out", "grounding": False, "pipeline": "both"}
 
     def test_main_module_subcommand_dispatch(self, monkeypatch):
         calls = []
@@ -503,3 +510,87 @@ class TestCLI:
 
         assert pkg_main(["benchmark", "--no-grounding"]) == 0
         assert calls == [["--no-grounding"]]
+
+
+# ---------------------------------------------------------------------------
+# Checkpointing / resume (the quota-failure safety net)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckpoints:
+    def _reports(self):
+        q = [_question("d1")]
+        classic = run_pipeline(
+            q, "classic",
+            _scripted(answer="alpha fact and beta fact [1]", source_files=["docs/en/docs/tutorial/a.md"]),
+            grounding_checker=lambda a, f: True,
+        )
+        agentic = run_pipeline(
+            q, "agentic",
+            _scripted(answer="alpha fact and beta fact [1]", source_files=["docs/en/docs/tutorial/a.md"]),
+            grounding_checker=lambda a, f: True,
+        )
+        return classic, agentic
+
+    def test_sidecars_written_and_merged(self, tmp_path):
+        classic, agentic = self._reports()
+        bm._write_pipeline_file(tmp_path, "s1", classic)
+        bm._write_pipeline_file(tmp_path, "s1", agentic)
+
+        merged = bm.merge_benchmark_checkpoints(tmp_path, "s1")
+        assert merged.exists()
+        payload = json.loads(merged.read_text(encoding="utf-8"))
+        assert set(payload["pipelines"]) == {"classic", "agentic"}
+        assert payload["comparison"] is not None
+        assert "PARTIAL" not in payload["note"]
+        assert payload["pipelines"]["classic"]["metrics"]["answer_correctness"] == 1.0
+        assert payload["pipelines"]["classic"]["rows"][0]["grounded"] is True
+
+    def test_merge_requires_both_sidecars(self, tmp_path):
+        classic, _ = self._reports()
+        bm._write_pipeline_file(tmp_path, "s1", classic)
+        with pytest.raises(FileNotFoundError, match="agentic"):
+            bm.merge_benchmark_checkpoints(tmp_path, "s1")
+
+    def test_run_benchmark_live_partial_writes_sidecar(self, tmp_path, monkeypatch):
+        def scripted(question: str) -> RunOutput:
+            return RunOutput(answer="alpha fact and beta fact [1]", source_files=["docs/en/docs/tutorial/a.md"], refused=False)
+
+        monkeypatch.setattr(bm, "_classic_run", scripted)
+        monkeypatch.setattr(bm, "_agentic_run", scripted)
+
+        out = bm.run_benchmark_live(out_dir=tmp_path, run_groundedness=False, pipeline="classic")
+        assert out.exists()
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["note"].startswith("PARTIAL")
+        assert payload["comparison"] is None
+        assert set(payload["pipelines"]) == {"classic"}
+        sidecars = list(tmp_path.glob("benchmark_*_classic.json"))
+        assert len(sidecars) == 1
+
+    def test_run_benchmark_live_bad_pipeline_raises(self):
+        with pytest.raises(ValueError, match="pipeline must be one of"):
+            bm.run_benchmark_live(pipeline="wat")
+
+    def test_cli_pipeline_flag(self, monkeypatch):
+        called = {}
+
+        def fake(dataset_path=None, *, out_dir=None, run_groundedness=True, pipeline="both"):
+            called["pipeline"] = pipeline
+            return "fake"
+
+        monkeypatch.setattr(bm, "run_benchmark_live", fake)
+        assert main(["--pipeline", "agentic"]) == 0
+        assert called["pipeline"] == "agentic"
+
+    def test_cli_merge_flag(self, monkeypatch, tmp_path):
+        got = {}
+
+        def fake_merge(out_dir, stamp):
+            got["dir"] = out_dir
+            got["stamp"] = stamp
+            return str(tmp_path / "merged.json")
+
+        monkeypatch.setattr(bm, "merge_benchmark_checkpoints", fake_merge)
+        assert main(["--merge", str(tmp_path), "s1"]) == 0
+        assert got == {"dir": str(tmp_path), "stamp": "s1"}
