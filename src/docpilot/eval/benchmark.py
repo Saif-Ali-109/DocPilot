@@ -579,7 +579,11 @@ def format_report(report: PipelineReport) -> str:
             flags.append("refused-when-should-answer" if not r.refused else "answered-when-should-refuse")
         if r.category == "docs-answerable" and r.answer_correct < 1.0:
             flags.append(f"facts={r.answer_correct:.2f}")
-        if r.category == "live-state-answerable" and r.tool_calls == 0:
+        if (
+            report.pipeline == "agentic"
+            and r.category == "live-state-answerable"
+            and r.tool_calls == 0
+        ):
             flags.append("no-tool")
         if r.recall == 0.0:
             flags.append("recall-miss")

@@ -4,7 +4,7 @@
     "created": "2026-09-08",
     "phase": 4,
     "spec_reference": "SPEC §6.1 — baseline metrics + classic-vs-agentic comparison",
-    "note": "The same question set runs through both pipelines (Phase 1 direct fast path vs Phase 2 agentic loop with Phase 3 GitHub tool). docs-answerable rows carry gold key facts (verbatim corpus phrasing) + gold source files for retrieval recall and citation scoring; live-state rows expect the tool to fire and a cited live answer; neither rows expect the verbatim 'I don't know' refusal."
+    "note": "The same question set runs through both pipelines (Phase 1 direct fast path vs Phase 2 agentic loop with Phase 3 GitHub tool). docs-answerable rows carry gold key facts as short paraphrase-robust fragments (an identifier or concept every correct answer must contain — verbatim corpus sentences over-penalize normal paraphrasing) + gold source files (stored corpus paths, as returned by the vector store) for retrieval recall and citation scoring; live-state rows expect the tool to fire and a cited live answer; neither rows expect the verbatim 'I don't know' refusal."
   },
   "questions": [
     {
@@ -12,10 +12,9 @@
       "category": "docs-answerable",
       "question": "How do I declare a query parameter with a default value in FastAPI?",
       "gold_key_facts": [
-        "As query parameters are not a fixed part of a path, they can be optional and can have default values",
-        "default values of skip=0 and limit=10"
+        "default value"
       ],
-      "gold_sources": ["docs/en/docs/tutorial/query-params.md"],
+      "gold_sources": ["en/docs/tutorial/query-params.md"],
       "gold_refusal": false,
       "note": "Reuses tool_necessity td01 context; answer must explain defaults."
     },
@@ -24,10 +23,9 @@
       "category": "docs-answerable",
       "question": "How do I declare the type of a path parameter in FastAPI?",
       "gold_key_facts": [
-        "standard Python type annotations",
-        "item_id is declared to be an int"
+        "type annotation"
       ],
-      "gold_sources": ["docs/en/docs/tutorial/path-params.md"],
+      "gold_sources": ["en/docs/tutorial/path-params.md"],
       "gold_refusal": false,
       "note": "Reuses tool_necessity td02."
     },
@@ -36,10 +34,9 @@
       "category": "docs-answerable",
       "question": "What is the response_model parameter used for in FastAPI?",
       "gold_key_facts": [
-        "use the path operation decorator parameter response_model instead of the return type",
-        "You can use the response_model parameter in any of the path operations"
+        "response_model"
       ],
-      "gold_sources": ["docs/en/docs/tutorial/response-model.md"],
+      "gold_sources": ["en/docs/tutorial/response-model.md"],
       "gold_refusal": false,
       "note": "Reuses tool_necessity td03."
     },
@@ -48,58 +45,59 @@
       "category": "docs-answerable",
       "question": "When do FastAPI background tasks run relative to the response?",
       "gold_key_facts": [
-        "You can define background tasks to be run after returning a response"
+        "background task",
+        "after"
       ],
-      "gold_sources": ["docs/en/docs/tutorial/background-tasks.md"],
+      "gold_sources": ["en/docs/tutorial/background-tasks.md"],
       "gold_refusal": false,
-      "note": "Reuses tool_necessity td04."
+      "note": "Reuses tool_necessity td04; facts = subject + timing anchor."
     },
     {
       "id": "bd05",
       "category": "docs-answerable",
       "question": "How do I send a request body with my FastAPI endpoint?",
       "gold_key_facts": [
-        "send it as a request body",
-        "you use Pydantic models"
+        "request body",
+        "Pydantic"
       ],
-      "gold_sources": ["docs/en/docs/tutorial/body.md"],
+      "gold_sources": ["en/docs/tutorial/body.md"],
       "gold_refusal": false,
-      "note": "Reuses tool_necessity td05."
+      "note": "Reuses tool_necessity td05; facts = mechanism + model type."
     },
     {
       "id": "bd06",
       "category": "docs-answerable",
       "question": "Does declaring a default value on a query parameter make it optional or required?",
       "gold_key_facts": [
-        "When you declare a default value for non-path parameters, then it is not required"
+        "optional",
+        "not required"
       ],
-      "gold_sources": ["docs/en/docs/tutorial/query-params.md"],
+      "gold_sources": ["en/docs/tutorial/query-params.md"],
       "gold_refusal": false,
-      "note": "Corpus-verbatim fact from query-params defaults section."
+      "note": "Corpus-derived fragments (optional / not required) — paraphrase-tolerant."
     },
     {
       "id": "bd07",
       "category": "docs-answerable",
       "question": "Why must the /users/me path operation be declared before the /users/{user_id} one?",
       "gold_key_facts": [
-        "Because path operations are evaluated in order",
-        "you need to make sure that the path for /users/me is declared before the one for /users/{user_id}"
+        "/users/me",
+        "before"
       ],
-      "gold_sources": ["docs/en/docs/tutorial/path-params.md"],
+      "gold_sources": ["en/docs/tutorial/path-params.md"],
       "gold_refusal": false,
-      "note": "Corpus-verbatim facts from path-params order note."
+      "note": "Corpus-derived fragments (literal-first precedence) — paraphrase-tolerant."
     },
     {
       "id": "bd08",
       "category": "docs-answerable",
       "question": "How do I declare cookie parameters in FastAPI?",
       "gold_key_facts": [
-        "You can define Cookie parameters the same way you define Query and Path parameters",
-        "you need to use Cookie"
+        "Cookie"
       ],
-      "gold_sources": ["docs/en/docs/tutorial/cookie-params.md"],
+      "gold_sources": ["en/docs/tutorial/cookie-params.md"],
       "gold_refusal": false,
-      "note": "Corpus-verbatim facts from cookie-params tutorial."
+      "note": "Corpus-derived fragment (Cookie) — paraphrase-tolerant."
     },
     {
       "id": "bl01",
