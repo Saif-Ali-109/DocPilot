@@ -81,8 +81,26 @@ class LLMSufficiencyJudge(SufficiencyJudge):
     in :mod:`docpilot.agent.prompts`.
     """
 
-    def __init__(self, generator: Generator) -> None:
+    def __init__(
+        self,
+        generator: Generator,
+        *,
+        system_prompt: str | None = None,
+    ) -> None:
+        """Build the judge over *generator*.
+
+        Args:
+            generator: The ``Generator`` the judge's single LLM call is
+                routed through (SPEC §4.1).
+            system_prompt: The judge system prompt to use; defaults to
+                :data:`~docpilot.agent.prompts.JUDGE_SYSTEM_PROMPT`.  Pass a
+                variant (e.g. ``JUDGE_SYSTEM_PROMPT_B``) for the Phase 4
+                two-prompt calibration run (SPEC §6.2).
+        """
         self._generator = generator
+        self._system_prompt = (
+            system_prompt if system_prompt is not None else JUDGE_SYSTEM_PROMPT
+        )
 
     def judge(
         self,
@@ -106,7 +124,7 @@ class LLMSufficiencyJudge(SufficiencyJudge):
         user_prompt = build_judge_user_prompt(
             question, query_used, results, tools_available=tools_available
         )
-        full_prompt = f"{JUDGE_SYSTEM_PROMPT}\n\n{user_prompt}"
+        full_prompt = f"{self._system_prompt}\n\n{user_prompt}"
 
         raw = self._generator.generate(full_prompt)
 

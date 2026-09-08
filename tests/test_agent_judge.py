@@ -14,7 +14,11 @@ from docpilot.agent.judge import (
     judge_parse_fallback_counts,
     reset_judge_parse_fallback_counts,
 )
-from docpilot.agent.prompts import JUDGE_SYSTEM_PROMPT, build_judge_user_prompt
+from docpilot.agent.prompts import (
+    JUDGE_SYSTEM_PROMPT,
+    JUDGE_SYSTEM_PROMPT_B,
+    build_judge_user_prompt,
+)
 from docpilot.agent.types import Judgment
 from docpilot.core.models import Chunk, RetrieverResult
 from docpilot.generation.generator import Generator
@@ -278,6 +282,47 @@ class TestLLMSufficiencyJudge:
 
         judge.judge("Q?", [_result()], "Q?", tools_available=True)
         assert "TOOLS AVAILABLE: yes" in stub.last_prompt
+
+    # -- Phase 4: prompt B variant + system-prompt parameterization ---------
+
+    def test_judge_accepts_custom_system_prompt(self) -> None:
+        stub = StubGenerator(
+            '{"verdict": "sufficient", "reason": "ok",'
+            ' "reformulated_query": null}'
+        )
+        judge = LLMSufficiencyJudge(stub, system_prompt=JUDGE_SYSTEM_PROMPT_B)
+        judge.judge("Q?", [_result()], "Q?")
+        assert stub.last_prompt is not None
+        assert "variant B" in stub.last_prompt
+
+    def test_judge_defaults_to_production_prompt_a(self) -> None:
+        stub = StubGenerator('{"verdict": "sufficient", "reason": "ok",'
+                             ' "reformulated_query": null}')
+        judge = LLMSufficiencyJudge(stub)
+        judge.judge("Q?", [_result()], "Q?")
+        assert "variant B" not in (stub.last_prompt or "")
+        assert JUDGE_SYSTEM_PROMPT in (stub.last_prompt or "")
+
+    def test_judge_prompt_b_is_distinct_but_contract_compatible(self) -> None:
+        assert JUDGE_SYSTEM_PROMPT_B != JUDGE_SYSTEM_PROMPT
+        # Same JSON contract keys.
+        for key in ('"verdict"', '"reason"', '"reformulated_query"',
+                    '"needs_tool"', '"tool_request"'):
+            assert key in JUDGE_SYSTEM_PROMPT_B
+        # Same live-validated tool rules (Phase 3 markers).
+        for marker in (
+            "github.search_issues",
+            "github.list_issues",
+            "github.get_commits",
+            "is:issue",
+            "prefer setting",
+            "needs_tool",
+        ):
+            assert marker in JUDGE_SYSTEM_PROMPT_B
+        # get_commits default-branch guidance carried over.
+        assert "omit `ref`" in JUDGE_SYSTEM_PROMPT_B
+        # JSON-only output directive (parse-failure contract parity).
+        assert "No markdown fences" in JUDGE_SYSTEM_PROMPT_B
 
 
 class TestBuildJudgeUserPrompt:

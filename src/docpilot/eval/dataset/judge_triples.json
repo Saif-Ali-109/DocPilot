@@ -1,0 +1,419 @@
+{
+  "meta": {
+    "name": "DocPilot judge verdict triples",
+    "created": "2026-09-08",
+    "phase": 4,
+    "spec_reference": "SPEC §6.2 — labeled verdict triples (judge calibration)",
+    "note": "Each triple: (question, context, gold_verdict). Contexts are real passages from the FastAPI corpus (docs/en/docs/**). Categories: sufficient-direct, sufficient-partial, insufficient-missing, irrelevant, adversarial. gold ∈ sufficient|insufficient. Judge-only — independent of retrieval/routing quality."
+  },
+  "triples": [
+    {
+      "id": "t01",
+      "category": "sufficient-direct",
+      "question": "What is a query parameter in FastAPI?",
+      "query_used": "What is a query parameter in FastAPI?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "When you declare other function parameters that are not part of the path parameters, they are automatically interpreted as 'query' parameters. The query is the set of key-value pairs that go after the '?' in a URL, separated by '&' characters. For example, in the URL http://127.0.0.1:8000/items/?skip=0&limit=10, the query parameters are skip, with a value of 0, and limit, with a value of 10. As they are part of the URL, they are 'naturally' strings. But when you declare them with Python types (in the example above, as int), they are converted to that type and validated against it.",
+          "source_file": "docs/en/docs/tutorial/query-params.md",
+          "heading": "Query Parameters",
+          "score": 0.87
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Concept directly present and citable."
+    },
+    {
+      "id": "t02",
+      "category": "sufficient-direct",
+      "question": "How do I declare a path parameter in FastAPI?",
+      "query_used": "How do I declare a path parameter in FastAPI?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "You can declare path 'parameters' or 'variables' with the same syntax used by Python format strings. The value of the path parameter item_id will be passed to your function as the argument item_id. So, if you run this example and go to http://127.0.0.1:8000/items/foo, you will see a response of {'item_id': 'foo'}. You can declare the type of a path parameter in the function, using standard Python type annotations.",
+          "source_file": "docs/en/docs/tutorial/path-params.md",
+          "heading": "Path Parameters",
+          "score": 0.85
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Direct how-to answer present."
+    },
+    {
+      "id": "t03",
+      "category": "sufficient-direct",
+      "question": "Do background tasks in FastAPI run before or after the response is returned?",
+      "query_used": "Do background tasks in FastAPI run before or after the response is returned?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "You can define background tasks to be run after returning a response. This is useful for operations that need to happen after a request, but that the client doesn't really have to be waiting for the operation to complete before receiving the response. This includes, for example, email notifications sent after performing an action: as connecting to an email server and sending an email tends to be 'slow', you can return the response right away and send the email notification in the background. Processing data: for example, you receive a file that must go through a slow process; you can return a response of 'Accepted' (HTTP 202) and process the file in the background.",
+          "source_file": "docs/en/docs/tutorial/background-tasks.md",
+          "heading": "Background Tasks",
+          "score": 0.86
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Answer stated explicitly ('run after returning a response')."
+    },
+    {
+      "id": "t04",
+      "category": "sufficient-direct",
+      "question": "How do I add a background task to a FastAPI path operation?",
+      "query_used": "How do I add a background task to a FastAPI path operation?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "Inside of your path operation function, pass your task function to the background tasks object with the method .add_task(). .add_task() receives as arguments: a task function to be run in the background, any sequence of arguments that should be passed to the task function in order, and any keyword arguments that should be passed to the task function.",
+          "source_file": "docs/en/docs/tutorial/background-tasks.md",
+          "heading": "Add the background task",
+          "score": 0.84
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "How-to present."
+    },
+    {
+      "id": "t05",
+      "category": "sufficient-direct",
+      "question": "What does FastAPI do with the return type declared on an endpoint function?",
+      "query_used": "What does FastAPI do with the return type declared on an endpoint function?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "You can declare the type used for the response by annotating the path operation function return type. FastAPI will use this return type to: validate the returned data (if the data is invalid, e.g. you are missing a field, it means that your app code is broken and it will return a server error instead of returning incorrect data); add a JSON Schema for the response, in the OpenAPI path operation (used by the automatic docs); and serialize the returned data to JSON using Pydantic. But most importantly: it will limit and filter the output data to what is defined in the return type.",
+          "source_file": "docs/en/docs/tutorial/response-model.md",
+          "heading": "Response Model - Return Type",
+          "score": 0.88
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Validation/JSON Schema/serialization/filtering all stated."
+    },
+    {
+      "id": "t06",
+      "category": "sufficient-direct",
+      "question": "How do I declare a request body in FastAPI?",
+      "query_used": "How do I declare a request body in FastAPI?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "When you need to send data from a client (let's say, a browser) to your API, you send it as a request body. A request body is data sent by the client to your API. To declare a request body, you use Pydantic models with all their power and benefits. To send data, you should use one of: POST (the most common), PUT, DELETE or PATCH. Sending a body with a GET request has an undefined behavior in the specifications, nevertheless, it is supported by FastAPI, only for very complex/extreme use cases.",
+          "source_file": "docs/en/docs/tutorial/body.md",
+          "heading": "Request Body",
+          "score": 0.83
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Direct how-to present."
+    },
+    {
+      "id": "t07",
+      "category": "sufficient-partial",
+      "question": "Can query parameters in FastAPI be optional and have default values?",
+      "query_used": "Can query parameters in FastAPI be optional and have default values?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "As query parameters are not a fixed part of a path, they can be optional and can have default values. In the example above they have default values of skip=0 and limit=10. So, going to the URL http://127.0.0.1:8000/items/ would be the same as going to http://127.0.0.1:8000/items/?skip=0&limit=10. But if you go to http://127.0.0.1:8000/items/?skip=20, the parameter values in your function will be: skip=20, because you set it in the URL, and limit=10, because that was the default value.",
+          "source_file": "docs/en/docs/tutorial/query-params.md",
+          "heading": "Defaults",
+          "score": 0.82
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Concept present and citable."
+    },
+    {
+      "id": "t08",
+      "category": "sufficient-partial",
+      "question": "What happens to my query parameter values if I declare them as integers?",
+      "query_used": "What happens to my query parameter values if I declare them as integers?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "The query is the set of key-value pairs that go after the '?' in a URL, separated by '&' characters. As they are part of the URL, they are 'naturally' strings. But when you declare them with Python types (in the example above, as int), they are converted to that type and validated against it. All the same processes that apply to path parameters also apply to query parameters: editor support, data parsing, data validation, and automatic documentation.",
+          "source_file": "docs/en/docs/tutorial/query-params.md",
+          "heading": "Query Parameters",
+          "score": 0.8
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Type conversion stated; mechanism detail partial but concept present."
+    },
+    {
+      "id": "t09",
+      "category": "sufficient-partial",
+      "question": "Can a FastAPI background task function be written as a normal def instead of async def?",
+      "query_used": "Can a FastAPI background task function be written as a normal def instead of async def?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "Create a function to be run as the background task. It is just a standard function that can receive parameters. It can be an async def or normal def function, FastAPI will know how to handle it correctly. In this case, the task function will write to a file (simulating sending an email). And as the write operation doesn't use async and await, we define the function with normal def.",
+          "source_file": "docs/en/docs/tutorial/background-tasks.md",
+          "heading": "Create a task function",
+          "score": 0.79
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Yes is stated; exact execution nuance (threadpool for sync) absent but not needed."
+    },
+    {
+      "id": "t10",
+      "category": "sufficient-partial",
+      "question": "What is response_model for when I want to return a database object?",
+      "query_used": "What is response_model for when I want to return a database object?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "There are some cases where you need or want to return some data that is not exactly what the type declares. For example, you could want to return a dictionary or a database object, but declare it as a Pydantic model. In those cases, you can use the path operation decorator parameter response_model instead of the return type. You can use the response_model parameter in any of the path operations: @app.get(), @app.post(), @app.put(), @app.delete(), etc.",
+          "source_file": "docs/en/docs/tutorial/response-model.md",
+          "heading": "response_model Parameter",
+          "score": 0.81
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Exact use case covered."
+    },
+    {
+      "id": "t11",
+      "category": "sufficient-partial",
+      "question": "Are path parameter values converted to my declared Python type?",
+      "query_used": "Are path parameter values converted to my declared Python type?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "You can declare the type of a path parameter in the function, using standard Python type annotations. In this case, item_id is declared to be an int. If you run this example and open your browser at http://127.0.0.1:8000/items/3, you will see a response of {'item_id': 3}. Notice that the value your function received (and returned) is 3, as a Python int, not a string '3'.",
+          "source_file": "docs/en/docs/tutorial/path-params.md",
+          "heading": "Path parameters with types",
+          "score": 0.78
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Conversion demonstrated concretely."
+    },
+    {
+      "id": "t12",
+      "category": "sufficient-partial",
+      "question": "Can I pass arguments to a FastAPI background task function?",
+      "query_used": "Can I pass arguments to a FastAPI background task function?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "Inside of your path operation function, pass your task function to the background tasks object with the method .add_task(). .add_task() receives as arguments: a task function to be run in the background, any sequence of arguments that should be passed to the task function in order, and any keyword arguments that should be passed to the task function.",
+          "source_file": "docs/en/docs/tutorial/background-tasks.md",
+          "heading": "Add the background task",
+          "score": 0.77
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Args/kwargs passing stated."
+    },
+    {
+      "id": "t13",
+      "category": "insufficient-missing",
+      "question": "How do I auto-cache database queries in FastAPI without writing any extra code?",
+      "query_used": "How do I auto-cache database queries in FastAPI without writing any extra code?",
+      "gold": "insufficient",
+      "chunks": [
+        {
+          "content": "When you declare other function parameters that are not part of the path parameters, they are automatically interpreted as 'query' parameters. The query is the set of key-value pairs that go after the '?' in a URL, separated by '&' characters. For example, in the URL http://127.0.0.1:8000/items/?skip=0&limit=10, the query parameters are skip, with a value of 0, and limit, with a value of 10.",
+          "source_file": "docs/en/docs/tutorial/query-params.md",
+          "heading": "Query Parameters",
+          "score": 0.64
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Phase 2 refuse seed — out-of-corpus; context unrelated."
+    },
+    {
+      "id": "t14",
+      "category": "insufficient-missing",
+      "question": "What is the current status of the OAuth token-expiration bug in the fastapi/fastapi GitHub repository?",
+      "query_used": "What is the current status of the OAuth token-expiration bug in the fastapi/fastapi GitHub repository?",
+      "gold": "insufficient",
+      "chunks": [
+        {
+          "content": "There are some cases where you need or want to return some data that is not exactly what the type declares. For example, you could want to return a dictionary or a database object, but declare it as a Pydantic model. In those cases, you can use the path operation decorator parameter response_model instead of the return type.",
+          "source_file": "docs/en/docs/tutorial/response-model.md",
+          "heading": "response_model Parameter",
+          "score": 0.55
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Live repo state — static docs cannot hold it (Phase 3 territory)."
+    },
+    {
+      "id": "t15",
+      "category": "insufficient-missing",
+      "question": "How do I deploy FastAPI to Kubernetes with autoscaling?",
+      "query_used": "How do I deploy FastAPI to Kubernetes with autoscaling?",
+      "gold": "insufficient",
+      "chunks": [
+        {
+          "content": "When you need to send data from a client (let's say, a browser) to your API, you send it as a request body. A request body is data sent by the client to your API. To declare a request body, you use Pydantic models with all their power and benefits. To send data, you should use one of: POST (the most common), PUT, DELETE or PATCH.",
+          "source_file": "docs/en/docs/tutorial/body.md",
+          "heading": "Request Body",
+          "score": 0.5
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Deployment/kubernetes absent from context."
+    },
+    {
+      "id": "t16",
+      "category": "insufficient-missing",
+      "question": "How do I use WebSockets in FastAPI?",
+      "query_used": "How do I use WebSockets in FastAPI?",
+      "gold": "insufficient",
+      "chunks": [
+        {
+          "content": "You can declare path 'parameters' or 'variables' with the same syntax used by Python format strings. The value of the path parameter item_id will be passed to your function as the argument item_id. So, if you run this example and go to http://127.0.0.1:8000/items/foo, you will see a response of {'item_id': 'foo'}.",
+          "source_file": "docs/en/docs/tutorial/path-params.md",
+          "heading": "Path Parameters",
+          "score": 0.52
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "WebSockets subject absent — unrelated context."
+    },
+    {
+      "id": "t17",
+      "category": "insufficient-missing",
+      "question": "How do I accept file uploads in a FastAPI endpoint?",
+      "query_used": "How do I accept file uploads in a FastAPI endpoint?",
+      "gold": "insufficient",
+      "chunks": [
+        {
+          "content": "As query parameters are not a fixed part of a path, they can be optional and can have default values. In the example above they have default values of skip=0 and limit=10. So, going to the URL http://127.0.0.1:8000/items/ would be the same as going to http://127.0.0.1:8000/items/?skip=0&limit=10.",
+          "source_file": "docs/en/docs/tutorial/query-params.md",
+          "heading": "Defaults",
+          "score": 0.53
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "File uploads absent — unrelated context (parallel to refuse candidacy)."
+    },
+    {
+      "id": "t18",
+      "category": "insufficient-missing",
+      "question": "How do I use FastAPI with a MongoDB database?",
+      "query_used": "How do I use FastAPI with a MongoDB database?",
+      "gold": "insufficient",
+      "chunks": [
+        {
+          "content": "You can define background tasks to be run after returning a response. This is useful for operations that need to happen after a request, but that the client doesn't really have to be waiting for the operation to complete before receiving the response. This includes, for example, email notifications sent after performing an action.",
+          "source_file": "docs/en/docs/tutorial/background-tasks.md",
+          "heading": "Background Tasks",
+          "score": 0.51
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "MongoDB absent from context (docs cover SQL-focused tutorial)."
+    },
+    {
+      "id": "t19",
+      "category": "adversarial",
+      "question": "If I set a default of limit=10 on a query parameter, is that default really used when the client does not send limit?",
+      "query_used": "If I set a default of limit=10 on a query parameter, is that default really used when the client does not send limit?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "As query parameters are not a fixed part of a path, they can be optional and can have default values. In the example above they have default values of skip=0 and limit=10. So, going to the URL http://127.0.0.1:8000/items/ would be the same as going to http://127.0.0.1:8000/items/?skip=0&limit=10. But if you go to http://127.0.0.1:8000/items/?skip=20, the parameter values in your function will be: skip=20, because you set it in the URL, and limit=10, because that was the default value.",
+          "source_file": "docs/en/docs/tutorial/query-params.md",
+          "heading": "Defaults",
+          "score": 0.76
+        }
+      ],
+      "paraphrase_of": "t07",
+      "note": "Uncertain-wording paraphrase of t07 — must still be sufficient."
+    },
+    {
+      "id": "t20",
+      "category": "adversarial",
+      "question": "Is it true that FastAPI background tasks run BEFORE the response is sent to the client?",
+      "query_used": "Is it true that FastAPI background tasks run BEFORE the response is sent to the client?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "You can define background tasks to be run after returning a response. This is useful for operations that need to happen after a request, but that the client doesn't really have to be waiting for the operation to complete before receiving the response. You can return the response right away and send the email notification in the background.",
+          "source_file": "docs/en/docs/tutorial/background-tasks.md",
+          "heading": "Background Tasks",
+          "score": 0.74
+        }
+      ],
+      "paraphrase_of": "t03",
+      "note": "Negated-premise paraphrase of t03 — the chunk contradicts the premise, so it is answerable (sufficient)."
+    },
+    {
+      "id": "t21",
+      "category": "adversarial",
+      "question": "Does FastAPI automatically cache query results the way a database cache would?",
+      "query_used": "Does FastAPI automatically cache query results the way a database cache would?",
+      "gold": "insufficient",
+      "chunks": [
+        {
+          "content": "You can declare the type used for the response by annotating the path operation function return type. FastAPI will use this return type to: validate the returned data (if the data is invalid, e.g. you are missing a field, it means that your app code is broken and it will return a server error instead of returning incorrect data); add a JSON Schema for the response, in the OpenAPI path operation (used by the automatic docs); and serialize the returned data to JSON using Pydantic.",
+          "source_file": "docs/en/docs/tutorial/response-model.md",
+          "heading": "Response Model - Return Type",
+          "score": 0.58
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Vocabulary lure ('automatic') — nothing here about query caching."
+    },
+    {
+      "id": "t22",
+      "category": "adversarial",
+      "question": "What version of Python does FastAPI require?",
+      "query_used": "What version of Python does FastAPI require?",
+      "gold": "insufficient",
+      "chunks": [
+        {
+          "content": "FastAPI CLI is a command line program that you can use to serve your FastAPI app, manage your FastAPI project, and more. When you add FastAPI to your project (e.g. with uv add 'fastapi[standard]'), it comes with a command line program you can run in the terminal. To run your FastAPI app for development, you can use the fastapi dev command.",
+          "source_file": "docs/en/docs/fastapi-cli.md",
+          "heading": "FastAPI CLI",
+          "score": 0.6
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Precision trap — context never states a Python version."
+    },
+    {
+      "id": "t23",
+      "category": "adversarial",
+      "question": "Can an endpoint's path parameter and a body field share the exact same name?",
+      "query_used": "Can an endpoint's path parameter and a body field share the exact same name?",
+      "gold": "insufficient",
+      "chunks": [
+        {
+          "content": "There are some cases where you need or want to return some data that is not exactly what the type declares. For example, you could want to return a dictionary or a database object, but declare it as a Pydantic model. In those cases, you can use the path operation decorator parameter response_model instead of the return type. You can use the response_model parameter in any of the path operations: @app.get(), @app.post(), @app.put(), @app.delete(), etc.",
+          "source_file": "docs/en/docs/tutorial/response-model.md",
+          "heading": "response_model Parameter",
+          "score": 0.57
+        }
+      ],
+      "paraphrase_of": null,
+      "note": "Near-miss vocabulary (path operation/field/param) — collision rule not in context."
+    },
+    {
+      "id": "t24",
+      "category": "adversarial",
+      "question": "Query parameters are the key-value pairs that come after the '?' in a URL — is that right?",
+      "query_used": "Query parameters are the key-value pairs that come after the '?' in a URL — is that right?",
+      "gold": "sufficient",
+      "chunks": [
+        {
+          "content": "The query is the set of key-value pairs that go after the '?' in a URL, separated by '&' characters. For example, in the URL http://127.0.0.1:8000/items/?skip=0&limit=10, the query parameters are skip, with a value of 0, and limit, with a value of 10.",
+          "source_file": "docs/en/docs/tutorial/query-params.md",
+          "heading": "Query Parameters",
+          "score": 0.73
+        }
+      ],
+      "paraphrase_of": "t01",
+      "note": "Yes/no rephrase of t01 — must be sufficient."
+    }
+  ]
+}
