@@ -546,8 +546,9 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
   wired (SPEC §6.3) — `_record_parse_fallback` INFO lines, hermetic tests.
 
 ## 5. phase_4: "Evaluation"
-- status: IN PROGRESS (2026-09-08) — slice 1 (judge two-prompt A/B) complete;
-  next: benchmark classic-vs-agentic comparison + false-refusal decomposition
+- status: IN PROGRESS (2026-09-08) — slices 1–2 complete (judge two-prompt A/B,
+  tool-necessity tri-class); next: classic-vs-agentic §6.1 comparison,
+  false-refusal decomposition, parse-fallback flip-condition check
 - summary: >
     Build a benchmark dataset and track: retrieval quality, answer correctness,
     citation correctness, groundedness/hallucination rate, "I don't know"
@@ -586,6 +587,47 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
     honest) — resolved via the decomposition eval, not ad hoc retries.
     Parse-fallback default (sufficient) stays pending Phase 4 flip-condition
     data (SPEC §6.3); slice 1 measured 0 parse fallbacks on the labeled set.
+
+### 5.2 slice_2 tool-necessity tri-class (2026-09-08 — complete)
+- dataset: `src/docpilot/eval/dataset/tool_necessity.json` — 15 gold tri-class
+  questions (5 docs-answerable / 5 live-state-answerable / 5 neither), each with
+  gold verdict, gold needs_tool and (for live-state) the expected tool action;
+  real FastAPI-corpus contexts; strict schema loader (`tool_necessity.py`).
+- harness: `src/docpilot/eval/tool_necessity.py` +
+  `python -m docpilot.eval tool-necessity`; judge run with
+  `tools_available=True` (decision-time measurement only — the actual GitHub
+  call is exercised by the classic-vs-agentic comparison). Metric block:
+  false-positive rate (tool fired on docs-answerable), false-negative rate (no
+  tool on live-state-answerable), neither_fire_rate, verdict accuracy,
+  tool-request validity, expected-action match; per-row parse-fallback
+  attribution. 28 hermetic tests; suite 284 passed.
+- result (live Groq, temp 0, prompt A, 15 questions; report
+  `src/docpilot/eval/reports/tool_necessity_20260908_181226.json`):
+  | metric | value |
+  | --- | --- |
+  | verdict accuracy | 1.000 |
+  | false-positive rate (docs-answerable → tool) | 0.000 |
+  | false-negative rate (live-state → no tool) | 0.000 |
+  | neither_fire_rate | 0.200 |
+  | tool_request_valid_rate | 1.000 |
+  | tool_action_match_rate | 0.667 |
+- reading: on this seed the judge's *necessity* signal is calibrated — it never
+  fired on docs-answerable (0 FP) and never missed a live-state trigger (0 FN).
+  Two flagged rows:
+  - tl03 ("how many open issues?") — fired correctly (`needs_tool` true) but
+    chose `search_issues` over gold `list_issues`; both actions can answer a
+    count → benign action-choice alternate, not a necessity failure; gold kept
+    strict (tool_action_match 4/6 on the error side of that strictness).
+  - tn03 ("maintainer hiring plans?") — genuine neither-class false fire
+    (`search_issues` on a personal/org question the repo-scoped tool can't
+    answer): needs_tool accuracy 14/15. Seed-level signal the judge reaches for
+    the tool on open-ended org questions; re-check in the benchmark +
+    decomposition slices.
+- exit_criteria_progress: SPEC §6.4 "tool-necessity report: FP/FN rates on the
+  tri-class set" → **CLOSED**; "benchmark dataset committed (labeled verdict
+  triples + adversarial + tri-class gold)" → committed across slices 1–2.
+  Remaining: §6.1 classic-vs-agentic comparison, false-refusal decomposition,
+  parse-fallback flip-condition check.
 
 ## 6. phase_5: "API + UI"
 - status: PLANNED
