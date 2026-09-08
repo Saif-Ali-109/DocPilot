@@ -364,14 +364,14 @@ def format_report(report: ToolNecessityReport) -> str:
         )
     lines.append("")
     for r in report.rows:
-        if not (r.correct_verdict and r.predicted_needs_tool == r.gold_needs_tool):
-            flags = []
-            if not r.correct_verdict:
-                flags.append(f"verdict {r.gold_verdict}≠{r.predicted_verdict}")
-            if r.predicted_needs_tool != r.gold_needs_tool:
-                flags.append(f"needs_tool {r.gold_needs_tool}≠{r.predicted_needs_tool}")
-            if r.predicted_needs_tool and not r.tool_action_matches:
-                flags.append(f"action {r.predicted_action}≠{r.gold_tool_action}")
+        flags = []
+        if not r.correct_verdict:
+            flags.append(f"verdict {r.gold_verdict}≠{r.predicted_verdict}")
+        if r.predicted_needs_tool != r.gold_needs_tool:
+            flags.append(f"needs_tool {r.gold_needs_tool}≠{r.predicted_needs_tool}")
+        if r.predicted_needs_tool and not r.tool_action_matches:
+            flags.append(f"action {r.predicted_action}≠{r.gold_tool_action}")
+        if flags:
             lines.append(f"  ✗ {r.id} [{r.cls}]: {'; '.join(flags)}")
         elif r.parse_fallback:
             lines.append(f"  ⚠ {r.id}: parse fallback")

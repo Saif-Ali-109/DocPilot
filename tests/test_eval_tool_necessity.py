@@ -390,6 +390,22 @@ class TestReportRendering:
         assert "✗ d01" in text
         assert "1.000" in text
 
+    def test_format_report_surfaces_action_only_mismatch(self):
+        # Verdict and needs_tool are correct; only the action choice differs —
+        # must still be flagged (regression: previously suppressed on
+        # otherwise-correct rows, hiding the tl03 live-run finding).
+        wrong = {"name": "github.get_commits", "params": {}}
+        table = {
+            "d01": ("sufficient", False, None),
+            "l01": ("insufficient", True, wrong),  # gold action is search_issues
+            "n01": ("insufficient", False, None),
+        }
+        report = evaluate_tool_necessity(_triples_for_classes(), ScriptedJudge(table))
+        text = format_report(report)
+
+        assert "✗ l01" in text
+        assert "action github.get_commits≠github.search_issues" in text
+
 
 # ---------------------------------------------------------------------------
 # CLI dispatch
