@@ -68,9 +68,16 @@ Tool rules (Phase 3 — live GitHub evidence):
   resort, used solely for evidence the docs corpus cannot hold.
 - When "needs_tool" is true, "reformulated_query" MUST be null, and
   "tool_request" MUST be exactly one of:
-      {"name": "github.search_issues", "params": {"query": "<terms>"}}
+      {"name": "github.search_issues", "params": {"query": "<terms> is:issue is:open"}}
       {"name": "github.list_issues",   "params": {"state": "open", ...}}
-      {"name": "github.get_commits",   "params": {"ref": "<branch>", ...}}
+      {"name": "github.get_commits",   "params": {}}
+  - search_issues query MUST include valid GitHub search qualifiers:
+    `is:issue` (not `in:issue`) and `is:open` for open-only results.
+    The tool appends repo scoping automatically; the rest of the query
+    must be GitHub-valid as-is.
+  - get_commits: omit `ref` to get the default branch.  Only include
+    `ref` when the user explicitly names a specific branch; never assume
+    `main` — many repositories use `master`.
   Choose the action + params that target the missing live evidence.
 - When "needs_tool" is false, "tool_request" MUST be null.
 - Output ONLY the JSON object.  No markdown fences, no explanation before

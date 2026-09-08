@@ -92,11 +92,15 @@ def make_commit(
     sha: str = "a" * 40,
     message: str = "Fix oauth refresh flow\n\nLong body here.",
     date: str = "2026-08-30T09:00:00Z",
+    author_name: str = "Test Bot",
 ) -> dict:
     return {
         "sha": sha,
         "html_url": f"https://github.com/acme/widget/commit/{sha}",
-        "commit": {"message": message, "author": {"date": date}},
+        "commit": {
+            "message": message,
+            "author": {"name": author_name, "date": date},
+        },
     }
 
 
@@ -267,6 +271,8 @@ def test_get_commits_success_without_ref_uses_default_branch() -> None:
     assert item["short_sha"] == "aaaaaaa"
     assert item["message_first_line"] == "Fix oauth refresh flow"
     assert item["date"] == "2026-08-30T09:00:00Z"
+    assert item["author_name"] == "Test Bot"
+    assert "by Test Bot" in result.summary
     assert item["source_label"] == "github:acme/widget@aaaaaaa"
 
 

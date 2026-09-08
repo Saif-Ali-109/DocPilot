@@ -253,10 +253,10 @@ class GitHubTool(Tool):
         raw_items = payload if isinstance(payload, list) else []
         items = [self._commit_record(i, owner, repo_name) for i in raw_items[:MAX_ITEMS]]
         ref_label = ref or "<default_branch>"
-        parts = [
-            f"{i['short_sha']} {i['message_first_line']} ({str(i['date'])[:10]})"
-            for i in items
-        ]
+        parts = []
+        for i in items:
+            by = f", by {i['author_name']}" if i.get("author_name") else ""
+            parts.append(f"{i['short_sha']} {i['message_first_line']} ({str(i['date'])[:10]}{by})")
         head = f"{len(parts)} commit(s) in {owner}/{repo_name}@{ref_label}"
         summary = f"{head}: " + " — ".join(parts) if parts else head
         return ToolResult(ok=True, summary=summary, items=items)
@@ -398,6 +398,7 @@ class GitHubTool(Tool):
             "message_first_line": self._trim(first_line),
             "html_url": commit.get("html_url", ""),
             "date": author.get("date", ""),
+            "author_name": author.get("name", ""),
             "source_label": f"github:{owner}/{repo}@{sha[:7]}",
         }
 
