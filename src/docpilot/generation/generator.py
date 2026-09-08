@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 import time
 from abc import ABC, abstractmethod
 
@@ -11,6 +12,12 @@ from docpilot import config
 from docpilot.generation.prompts import SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
+
+# Maximum wait (seconds) honored from a server retry-after on a rate-limit
+# error. A short TPM wait (~0.5s) is honored so the request self-heals; a
+# huge TPD wait (minutes) is capped so the daily wall fails fast instead of
+# hanging the retry loop for ~3× the advertised wait.
+_RETRY_AFTER_MAX_SECONDS = 10.0
 
 
 class Generator(ABC):
@@ -68,6 +75,10 @@ class GroqGenerator(Generator):
 
         Retry only on transient failures (429, 5xx, connection errors).
         Non-transient errors (4xx other than 429) are raised immediately.
+
+        On a rate-limit error the server's ``retry-after`` is honored
+        (bounded by ``_RETRY_AFTER_MAX_SECONDS``); without one, exponential
+        jitter applies.
         """
         last_exc: Exception | None = None
 
@@ -88,7 +99,13 @@ class GroqGenerator(Generator):
             except Exception as exc:
                 last_exc = exc
                 if self._is_transient(exc):
-                    wait = self._backoff(attempt)
+                    server_wait = self._server_retry_after(exc)
+                    if server_wait is not None:
+                        # Honor a short wait (TPM self-heal) but fail fast on
+                        # a wall-of-death wait (exhausted daily quota).
+                        wait = min(server_wait, _RETRY_AFTER_MAX_SECONDS)
+                    else:
+                        wait = self._backoff(attempt)
                     logger.warning(
                         "Groq request failed (attempt %d/%d): %s — retrying in %.1fs",
                         attempt + 1,
@@ -126,6 +143,36 @@ class GroqGenerator(Generator):
             return status in (429, 500, 502, 503, 504)
 
         return False
+
+    @staticmethod
+    def _server_retry_after(exc: Exception) -> float | None:
+        """Seconds the server asked us to wait, if it told us.
+
+        Prefers the HTTP ``retry-after`` header; falls back to Groq's message
+        text ("Please try again in 495ms. / in 1m4.8s. / in 13m29.136s.").
+        Returns ``None`` when the server gave no usable wait.
+        """
+        response = getattr(exc, "response", None)
+        headers = getattr(response, "headers", None)
+        if headers is not None:
+            val = headers.get("retry-after")
+            if val is not None:
+                try:
+                    return max(0.0, float(val))
+                except (TypeError, ValueError):
+                    pass
+
+        body = str(getattr(exc, "message", "") or exc)
+        m = re.search(r"try again in (\d+(?:\.\d+)?)\s*(ms|s|m)", body)
+        if m:
+            seconds = float(m.group(1))
+            unit = m.group(2)
+            if unit == "ms":
+                return seconds / 1000.0
+            if unit == "m":
+                return seconds * 60.0
+            return seconds
+        return None
 
     @staticmethod
     def _backoff(attempt: int, base: float = 1.0) -> float:
