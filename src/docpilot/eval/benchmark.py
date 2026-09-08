@@ -872,15 +872,24 @@ def merge_benchmark_checkpoints(out_dir: str | Path, stamp: str) -> Path:
     return out_path
 
 
-def probe_quota(min_remaining: int = 100_000) -> int:
-    """Headroom probe: one tiny completions call that reads the org's token
-    quota from the ``x-ratelimit-*`` response headers.
+# Per-minute token headroom required for a real call to be serviable right now.
+# The per-minute bucket refills in seconds, so this is only a functional gate
+# ("would my first call 429 this minute"), not a run-viability gate.
+_PROBE_MIN_RPM_TOKENS = 1000
 
-    Returns 0 when the org has real headroom (≥ ``min_remaining`` tokens — a
-    pipeline half burns ~60–100k), 1 when rate-limited OR when remaining
-    headroom is below the gate, 2 on any other failure. Live runs are gated
-    on ``--probe && …`` so an exhausted org is detected up front instead of
-    after a dead run (SPEC §6.5).
+
+def probe_quota() -> int:
+    """Functional gate: auth + model reachable + a real completion works +
+    per-minute token headroom for a call right now.
+
+    Returns 0 (OK), 1 (actively rate-limited / throttled), or 2 (other
+    failure). **TPD caveat:** Groq does not expose the daily token bucket via
+    the API (verified live 2026-09-08 — no ratelimit headers and no
+    admission-time gate on ``max_tokens``), so this probe makes no claim about
+    daily headroom. Before a live run the operator must confirm the key's org
+    has a fresh daily bucket; a mid-run TPD wall is handled by per-half
+    checkpointing + resume-at-stamp + retry-after fail-fast, not by this gate
+    (SPEC §6.5).
     """
     from docpilot.generation.generator import GroqGenerator
 
@@ -898,18 +907,22 @@ def probe_quota(min_remaining: int = 100_000) -> int:
             return 1
         print(f"probe: FAILED ({reason[:200]})")
         return 2
-    tail = f" (limit={result.limit})" if result.limit is not None else ""
+    print(f"probe: OK — completion={result.completion[:40]!r}")
     print(
-        f"probe: OK — completion={result.completion[:40]!r}, "
-        f"tokens remaining={result.remaining}{tail}"
+        "probe: per-minute rate limits — "
+        f"tokens remaining={result.remaining}/{result.limit}, "
+        f"requests remaining={result.requests_remaining}/1000"
     )
-    if result.remaining is not None and result.remaining < min_remaining:
+    if result.remaining is not None and result.remaining < _PROBE_MIN_RPM_TOKENS:
         print(
-            f"probe: GATE FAIL — remaining {result.remaining} < {min_remaining}: "
-            "a pipeline half burns ~60–100k tokens, so this org cannot finish "
-            "a half safely."
+            f"probe: GATE FAIL — per-minute tokens remaining {result.remaining} < "
+            f"{_PROBE_MIN_RPM_TOKENS}; a real call would 429 right now."
         )
         return 1
+    print(
+        "probe: NOTE — daily TPD headroom is NOT exposed by Groq; you must "
+        "confirm this key's org has a fresh daily bucket before a live run."
+    )
     return 0
 
 

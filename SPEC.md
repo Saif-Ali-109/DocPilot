@@ -658,13 +658,17 @@ protocol, locked:
   `--merge DIR STAMP` merges two existing sidecars. Granularity is per
   pipeline — a crashed half reruns wholesale; per-question resume is not in
   scope.
-- **Probe before launch.** Live runs are gated on a `--probe` headroom check so
-  a quota-exhausted org is detected up front instead of after a ~40-minute dead
-  run. The probe reads the org's `x-ratelimit-*` token headers on a successful
-  tiny call, not just the call's success — a tiny call fits inside a nearly
-  exhausted bucket (observed live: probe OK at ~500 tokens headroom, then the
-  first 2.7k-token answer call hit the daily wall), so the gate is
-  remaining-tokens ≥ ~100k, roughly a full pipeline half.
+- **Probe before launch.** Live runs are gated on a `--probe` functional check:
+  auth + model reachable + one real completion served + per-minute token
+  headroom for a call right now. **TPD is not probe-able** — Groq exposes only
+  per-minute buckets as response headers and does not gate admission on
+  `max_tokens` (verified live 2026-09-08: a 16k-`max_tokens` probe was admitted
+  and served ~18k output tokens on an org whose daily bucket was ~500 tokens
+  from the wall; a tiny call can likewise return OK inside a nearly exhausted
+  daily bucket). The probe therefore claims nothing about daily headroom:
+  before a live run the operator must assert the key's org has a fresh daily
+  bucket, and a mid-run TPD wall is absorbed by per-half checkpointing +
+  resume-at-stamp + retry-after fail-fast rather than by the gate.
 - **429 self-healing.** The generator honors the server's `retry-after` on
   rate-limit errors (bounded), so per-minute bursts recover; a daily-cap wall
   fails fast instead of hanging retries.

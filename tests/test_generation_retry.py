@@ -231,9 +231,10 @@ class TestProbe:
             [
                 _RawResponse(
                     headers={
-                        "x-ratelimit-limit-tokens": "200000",
-                        "x-ratelimit-used-tokens": "50000",
-                        "x-ratelimit-remaining-tokens": "150000",
+                        "x-ratelimit-limit-tokens": "8000",
+                        "x-ratelimit-used-tokens": "1000",
+                        "x-ratelimit-remaining-tokens": "7000",
+                        "x-ratelimit-remaining-requests": "950",
                     },
                     content="OK",
                 )
@@ -242,9 +243,10 @@ class TestProbe:
         res = gen.probe()
         assert res.ok
         assert res.completion == "OK"
-        assert res.limit == 200000
-        assert res.used == 50000
-        assert res.remaining == 150000
+        assert res.limit == 8000
+        assert res.used == 1000
+        assert res.remaining == 7000
+        assert res.requests_remaining == 950
 
     def test_missing_headers_default_to_none(self):
         res = _probe_gen([_RawResponse(headers={}, content="OK")]).probe()

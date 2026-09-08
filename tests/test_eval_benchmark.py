@@ -633,7 +633,9 @@ class TestCheckpoints:
 
 
 class TestProbe:
-    """probe_quota(): 0 = headroom OK, 1 = rate-limited / below gate, 2 = other."""
+    """probe_quota(): 0 = functional OK, 1 = rate-limited / throttled, 2 = other.
+    Functional gate only — TPD is not introspectable and never claimed.
+    """
 
     def _patch_probe(self, monkeypatch, result_fn):
         class _FakeGen:
@@ -645,7 +647,7 @@ class TestProbe:
 
         monkeypatch.setattr("docpilot.generation.generator.GroqGenerator", _FakeGen)
 
-    def test_probe_ok_with_headroom_returns_zero(self, monkeypatch, capsys):
+    def test_probe_ok_reports_per_minute_headroom(self, monkeypatch, capsys):
         from docpilot.generation.generator import ProbeResult
 
         self._patch_probe(
@@ -653,15 +655,19 @@ class TestProbe:
             lambda: ProbeResult(
                 ok=True,
                 completion="OK",
-                limit=200000,
-                used=50000,
-                remaining=150000,
+                limit=8000,
+                used=1000,
+                remaining=7000,
+                requests_remaining=950,
             ),
         )
         assert bm.probe_quota() == 0
         out = capsys.readouterr().out
         assert "probe: OK" in out
-        assert "tokens remaining=150000" in out
+        assert "tokens remaining=7000/8000" in out
+        assert "requests remaining=950/1000" in out
+        # honest caveat: daily TPD is not exposed and must be operator-confirmed
+        assert "NOT exposed" in out
 
     def test_probe_rate_limited_prints_limit_used(self, monkeypatch, capsys):
         from docpilot.generation.generator import ProbeResult
@@ -683,36 +689,33 @@ class TestProbe:
         assert "RATE LIMITED" in out
         assert "Limit=200000 Used=199455" in out
 
-    def test_probe_ok_but_below_gate_returns_one(self, monkeypatch, capsys):
+    def test_probe_throttled_per_minute_returns_one(self, monkeypatch, capsys):
         from docpilot.generation.generator import ProbeResult
 
-        # 25k remaining looks healthy to a tiny call, but a half needs ~60-100k.
         self._patch_probe(
             monkeypatch,
             lambda: ProbeResult(
                 ok=True,
                 completion="OK",
-                limit=200000,
-                used=175000,
-                remaining=25000,
+                limit=8000,
+                used=7990,
+                remaining=10,
+                requests_remaining=1,
             ),
         )
         assert bm.probe_quota() == 1
         out = capsys.readouterr().out
         assert "GATE FAIL" in out
-        assert "remaining 25000 < 100000" in out
+        assert "per-minute tokens remaining 10 < 1000" in out
 
     def test_probe_missing_headers_default_ok(self, monkeypatch, capsys):
         from docpilot.generation.generator import ProbeResult
 
-        # No x-ratelimit headers: fall back to "answered = have headroom".
-        self._patch_probe(
-            monkeypatch,
-            lambda: ProbeResult(ok=True, completion="OK"),
-        )
+        # No x-ratelimit headers: nothing to gate on beyond a successful call.
+        self._patch_probe(monkeypatch, lambda: ProbeResult(ok=True, completion="OK"))
         assert bm.probe_quota() == 0
         out = capsys.readouterr().out
-        assert "tokens remaining=None" in out
+        assert "tokens remaining=None/None" in out
 
     def test_probe_other_error_returns_two(self, monkeypatch, capsys):
         from docpilot.generation.generator import ProbeResult

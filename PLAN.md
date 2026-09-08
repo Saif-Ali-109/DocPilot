@@ -680,9 +680,18 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
   Used 199455/200000, first answer call Requested 2700. Root cause: the swap
   landed on the same org's bucket (Used 199455 vs 199443 at the original
   crash), and the then-current probe passed because a tiny call fit the ~300
-  remaining tokens. Fixed: probe now reads `x-ratelimit-*` headers and gates on
-  remaining ≥ ~100k (commit pending). Resume reruns wholesale under stamp
-  190539 once a genuinely fresh org / upgraded tier key is in place.
+  remaining tokens. Probe then redesigned (commit pending) after two live
+  experiments: (1) Groq only exposes per-minute buckets in headers
+  (`x-ratelimit-*-tokens` = 8000/min) — no TPD header exists; (2) TPD is not
+  gated at admission either — a 16k-`max_tokens` probe was admitted and served
+  ~18k output tokens on the same near-empty org. Conclusion recorded in SPEC
+  §6.5: TPD headroom is NOT introspectable; `--probe` is a functional gate
+  (auth/model/call + per-minute headroom) and daily-bucket viability is an
+  operator assertion backed by per-half checkpointing + resume-at-stamp +
+  retry-after fail-fast. The org is slowly refilling as its 24h window slides
+  (admitted ~18k just now) but cannot support a full ~60–90k agentic half yet.
+  Resume reruns wholesale under stamp 190539 once a genuinely fresh org /
+  upgraded tier or window-slide headroom is available.
 - follow-up: token accounting — generator discards Groq `usage`; record
   per-call tokens in reports so quota economics are inspectable.
 - exit_criteria_progress: §6.4 "classic-vs-agentic comparison" → in progress

@@ -34,13 +34,20 @@ def _int_header(headers, name: str) -> int | None:
 
 @dataclass(frozen=True)
 class ProbeResult:
-    """Outcome of a one-call quota headroom probe (Groq x-ratelimit-* headers)."""
+    """Outcome of a one-call probe (SPEC §6.5).
+
+    ``limit``/``used``/``remaining`` reflect Groq's **per-minute** token bucket
+    (8k/min on the free tier) as reported by response headers. Groq does NOT
+    expose the daily (TPD) token bucket via the API, so no probe can read it —
+    TPD risk is carried by the run machinery, not this gate.
+    """
 
     ok: bool
     completion: str | None = None
     limit: int | None = None
     used: int | None = None
     remaining: int | None = None
+    requests_remaining: int | None = None
     reason: str = ""
 
 
@@ -146,12 +153,14 @@ class GroqGenerator(Generator):
         raise last_exc  # type: ignore[misc]
 
     def probe(self) -> ProbeResult:
-        """One minimal completions call that reads the org's token quota from
-        the ``x-ratelimit-*`` response headers.
+        """One minimal completions call that reads the per-minute rate-limit
+        headers (``x-ratelimit-*-tokens`` / ``-requests``).
 
-        A tiny call can succeed inside a nearly exhausted daily bucket, so a
-        plain success is NOT proof of headroom — the headers are the gate
-        (SPEC §6.5). Single attempt, no retries.
+        Functional gate: verifies the key authenticates, the model is
+        reachable, and a real call can be served right now. Groq exposes only
+        per-minute buckets in headers — the daily (TPD) token bucket that
+        actually kills long runs is NOT exposed, so this probe makes no claim
+        about daily headroom (SPEC §6.5). Single attempt, no retries.
         """
         try:
             raw = self._client.chat.completions.with_raw_response.create(
@@ -167,6 +176,7 @@ class GroqGenerator(Generator):
                 limit=_int_header(headers, "x-ratelimit-limit-tokens"),
                 used=_int_header(headers, "x-ratelimit-used-tokens"),
                 remaining=_int_header(headers, "x-ratelimit-remaining-tokens"),
+                requests_remaining=_int_header(headers, "x-ratelimit-remaining-requests"),
             )
         except Exception as exc:  # noqa: BLE001 - any failure becomes a verdict
             return ProbeResult(ok=False, reason=f"{type(exc).__name__}: {exc}")
