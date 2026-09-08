@@ -11,10 +11,10 @@ Runs the **same** question set through both pipelines:
 Metrics per question (categories: ``docs-answerable`` / ``live-state-answerable``
 / ``neither``):
 
-  * answer correctness — docs: fraction of gold key facts (verbatim corpus
-    phrasing) contained in the answer body; live: answered **and** the tool
-    fired (0.5 = answered without the tool, 0.0 = refused); neither: 1.0 iff
-    refused (this is the "I don't know" accuracy);
+  * answer correctness — docs: fraction of gold key facts (short
+    paraphrase-robust fragments) contained in the answer body; live: answered
+    **and** the tool fired (0.5 = answered without the tool, 0.0 = refused);
+    neither: 1.0 iff refused (this is the "I don't know" accuracy);
   * retrieval recall@k — any gold source file present in the offered sources
     (docs-only, where gold sources exist);
   * citation validity — body citation markers that resolve inside the offered
@@ -872,8 +872,42 @@ def merge_benchmark_checkpoints(out_dir: str | Path, stamp: str) -> Path:
     return out_path
 
 
+def probe_quota() -> int:
+    """Headroom probe: one tiny completions call against the configured model.
+
+    Returns 0 when the model answers (quota OK), 1 when rate-limited (prints
+    the Limit/Used figures Groq reports), 2 on any other failure. Live runs
+    are gated on ``--probe && …`` so an exhausted org is detected up front
+    instead of after a ~40-minute dead run (SPEC §6.5).
+    """
+    from docpilot.generation.generator import GroqGenerator
+
+    gen = GroqGenerator(max_retries=1)
+    print(f"probe: model={gen._model}")
+    try:
+        completion = gen.generate("Reply exactly OK.")
+    except Exception as exc:  # noqa: BLE001 - any failure must surface as a verdict
+        status = getattr(exc, "status_code", None)
+        body = str(getattr(exc, "message", "") or exc)
+        if status == 429:
+            m = re.search(r"Limit (\d+), Used (\d+)", body)
+            if m:
+                print(f"probe: RATE LIMITED — Limit={m.group(1)} Used={m.group(2)}")
+            else:
+                print(f"probe: RATE LIMITED — {body[:200]}")
+            return 1
+        print(f"probe: FAILED ({status or type(exc).__name__}) — {body[:200]}")
+        return 2
+    print(f"probe: OK — completion={completion[:40]!r}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
-    """CLI: ``python -m docpilot.eval benchmark [--dataset PATH] [--out DIR] [--no-grounding] [--pipeline {classic,agentic,both}] [--resume STAMP] [--merge DIR STAMP]``."""
+    """CLI: ``python -m docpilot.eval benchmark [--probe] [--dataset PATH] [--out DIR] [--no-grounding] [--pipeline {classic,agentic,both}] [--resume STAMP] [--merge DIR STAMP]``.
+
+    ``--probe`` performs a one-call quota headroom check and exits 0 (OK) /
+    1 (rate limited) / 2 (other failure) — gate live runs with ``--probe &&``.
+    """
     args = list(argv) if argv is not None else sys.argv[1:]
     dataset_path: str | Path | None = None
     out_dir: str | Path | None = None
@@ -896,6 +930,8 @@ def main(argv: list[str] | None = None) -> int:
             out_dir = args[i]
         elif args[i] == "--no-grounding":
             run_groundedness = False
+        elif args[i] == "--probe":
+            return probe_quota()
         elif args[i] == "--pipeline":
             i += 1
             if i >= len(args) or args[i] not in _PIPELINE_CHOICES:

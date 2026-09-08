@@ -625,3 +625,60 @@ class TestCheckpoints:
 
     def test_cli_resume_requires_stamp_shape(self):
         assert main(["--resume", "not-a-stamp"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# Quota headroom probe (SPEC §6.5 — gate live runs on --probe)
+# ---------------------------------------------------------------------------
+
+
+class TestProbe:
+    """probe_quota(): 0 = OK, 1 = rate-limited (prints Limit/Used), 2 = other."""
+
+    def _patch_generator(self, monkeypatch, gen_cls):
+        import types
+
+        class _FakeGen:
+            def __init__(self, **kwargs):
+                self._model = "probe-model"
+
+            def generate(self, prompt):  # noqa: ARG002
+                return gen_cls()  # callback raises or returns
+
+        monkeypatch.setattr("docpilot.generation.generator.GroqGenerator", _FakeGen)
+
+    def test_probe_ok_returns_zero(self, monkeypatch, capsys):
+        self._patch_generator(monkeypatch, lambda: "OK")
+        assert bm.probe_quota() == 0
+        assert "probe: OK" in capsys.readouterr().out
+
+    def test_probe_rate_limited_prints_limit_used(self, monkeypatch, capsys):
+        import types
+
+        class _RateLimited(Exception):
+            def __init__(self):
+                super().__init__("Rate limit reached ... Limit 200000, Used 199443, Requested 2430")
+                self.message = "Rate limit reached ... Limit 200000, Used 199443, Requested 2430"
+                self.status_code = 429
+                self.response = types.SimpleNamespace(headers={})
+
+        self._patch_generator(monkeypatch, lambda: (_ for _ in ()).throw(_RateLimited()))
+        assert bm.probe_quota() == 1
+        out = capsys.readouterr().out
+        assert "RATE LIMITED" in out
+        assert "Limit=200000 Used=199443" in out
+
+    def test_probe_other_error_returns_two(self, monkeypatch, capsys):
+        class _AuthError(Exception):
+            def __init__(self):
+                super().__init__("401 invalid key")
+                self.message = "401 invalid key"
+                self.status_code = 401
+
+        self._patch_generator(monkeypatch, lambda: (_ for _ in ()).throw(_AuthError()))
+        assert bm.probe_quota() == 2
+        assert "FAILED (401)" in capsys.readouterr().out
+
+    def test_cli_probe_flag_returns_probe_code(self, monkeypatch):
+        monkeypatch.setattr(bm, "probe_quota", lambda: 1)
+        assert main(["--probe"]) == 1
