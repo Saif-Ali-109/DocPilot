@@ -487,7 +487,7 @@ class TestCLI:
     def test_dispatches_live_run(self, monkeypatch):
         called = {}
 
-        def fake(dataset_path=None, *, out_dir=None, run_groundedness=True, pipeline="both"):
+        def fake(dataset_path=None, *, out_dir=None, run_groundedness=True, pipeline="both", stamp=None):
             called["path"] = dataset_path
             called["out"] = out_dir
             called["grounding"] = run_groundedness
@@ -575,7 +575,7 @@ class TestCheckpoints:
     def test_cli_pipeline_flag(self, monkeypatch):
         called = {}
 
-        def fake(dataset_path=None, *, out_dir=None, run_groundedness=True, pipeline="both"):
+        def fake(dataset_path=None, *, out_dir=None, run_groundedness=True, pipeline="both", stamp=None):
             called["pipeline"] = pipeline
             return "fake"
 
@@ -594,3 +594,34 @@ class TestCheckpoints:
         monkeypatch.setattr(bm, "merge_benchmark_checkpoints", fake_merge)
         assert main(["--merge", str(tmp_path), "s1"]) == 0
         assert got == {"dir": str(tmp_path), "stamp": "s1"}
+
+    def test_resume_adopts_existing_sidecar(self, tmp_path, monkeypatch):
+        """A crashed run's finished half is adopted when resuming under the same stamp."""
+        classic, _ = self._reports()
+        bm._write_pipeline_file(tmp_path, "r1", classic)
+
+        def scripted(question: str) -> RunOutput:
+            return RunOutput(answer="alpha fact and beta fact [1]", source_files=["docs/en/docs/tutorial/a.md"], refused=False)
+
+        monkeypatch.setattr(bm, "_agentic_run", scripted)
+        out = bm.run_benchmark_live(out_dir=tmp_path, run_groundedness=False, pipeline="agentic", stamp="r1")
+        assert out.exists()
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert set(payload["pipelines"]) == {"classic", "agentic"}
+        assert payload["comparison"] is not None
+        assert "PARTIAL" not in payload["note"]
+
+    def test_cli_resume_flag(self, monkeypatch):
+        called = {}
+
+        def fake(dataset_path=None, *, out_dir=None, run_groundedness=True, pipeline="both", stamp=None):
+            called["pipeline"] = pipeline
+            called["stamp"] = stamp
+            return "fake"
+
+        monkeypatch.setattr(bm, "run_benchmark_live", fake)
+        assert main(["--pipeline", "agentic", "--resume", "20260908_190539"]) == 0
+        assert called == {"pipeline": "agentic", "stamp": "20260908_190539"}
+
+    def test_cli_resume_requires_stamp_shape(self):
+        assert main(["--resume", "not-a-stamp"]) == 2

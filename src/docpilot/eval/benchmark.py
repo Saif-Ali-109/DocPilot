@@ -755,7 +755,7 @@ def _combined_json(
         + ", ".join(sorted(reports))
         + " written (missing "
         + ", ".join(sorted(set(_PIPELINE_CHOICES) - {"both"} - set(reports)))
-        + "); rerun the missing half with --pipeline and merge."
+        + "); rerun the missing half with --pipeline and --resume STAMP to resume."
     )
     return {
         "dataset_path": str(dataset_path),
@@ -772,12 +772,18 @@ def run_benchmark_live(
     out_dir: str | Path | None = None,
     run_groundedness: bool = True,
     pipeline: str = "both",
+    stamp: str | None = None,
 ) -> Path:
     """Run the selected pipeline(s) over the benchmark, checkpointing each half.
 
     Each pipeline's report is persisted to a sidecar file as soon as it
     completes, so a quota/failure mid-run never loses the finished half; the
     combined file + comparison is written only when both sides are present.
+
+    Resume flow: if a half crashed before completing, rerun it alone with
+    ``pipeline="agentic"`` (or ``classic``) and ``stamp=<the crashed run's
+    stamp>``; the finished sidecar from the crashed run is adopted and the
+    combined report + comparison is produced for that stamp.
     """
     if pipeline not in _PIPELINE_CHOICES:
         raise ValueError(
@@ -787,7 +793,7 @@ def run_benchmark_live(
     benchmark = load_benchmark(dataset_path)
     out_dir = Path(out_dir) if out_dir else _REPORTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime("%Y%m%d_%H%M%S")
+    stamp = stamp or time.strftime("%Y%m%d_%H%M%S")
     logger.info("Benchmark: %d questions from %s", len(benchmark), dataset_path)
 
     checker = GroundingChecker() if run_groundedness else None
@@ -809,6 +815,16 @@ def run_benchmark_live(
         print(format_metrics(report))
         print()
 
+    partial = len(reports) < 2
+    if partial:
+        # Resume: adopt a previously-checkpointed sidecar for the missing half
+        # when it already exists under this stamp (e.g. --pipeline agentic
+        # --resume STAMP after the classic half completed under STAMP earlier).
+        for name in ("classic", "agentic"):
+            if name not in reports:
+                side = out_dir / f"benchmark_{stamp}_{name}.json"
+                if side.exists():
+                    reports[name] = _load_pipeline_file(side, name)
     partial = len(reports) < 2
     out_path = out_dir / f"benchmark_{stamp}.json"
     out_path.write_text(
@@ -857,12 +873,13 @@ def merge_benchmark_checkpoints(out_dir: str | Path, stamp: str) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI: ``python -m docpilot.eval benchmark [--dataset PATH] [--out DIR] [--no-grounding] [--pipeline {classic,agentic,both}] [--merge DIR STAMP]``."""
+    """CLI: ``python -m docpilot.eval benchmark [--dataset PATH] [--out DIR] [--no-grounding] [--pipeline {classic,agentic,both}] [--resume STAMP] [--merge DIR STAMP]``."""
     args = list(argv) if argv is not None else sys.argv[1:]
     dataset_path: str | Path | None = None
     out_dir: str | Path | None = None
     run_groundedness = True
     pipeline: str = "both"
+    stamp: str | None = None
     i = 0
     while i < len(args):
         if args[i] in ("--datasets", "--dataset", "--triples"):
@@ -885,6 +902,15 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"--pipeline requires one of {_PIPELINE_CHOICES}", file=sys.stderr)
                 return 2
             pipeline = args[i]
+        elif args[i] == "--resume":
+            i += 1
+            if i >= len(args) or not (
+                len(args[i]) == 15 and args[i][8] == "_"
+                and args[i][:8].isdigit() and args[i][9:].isdigit()
+            ):
+                print("--resume requires the crashed run's STAMP (e.g. 20260908_190539)", file=sys.stderr)
+                return 2
+            stamp = args[i]
         elif args[i] == "--merge":
             i += 1
             if i + 1 >= len(args):
@@ -901,6 +927,7 @@ def main(argv: list[str] | None = None) -> int:
         out_dir=out_dir,
         run_groundedness=run_groundedness,
         pipeline=pipeline,
+        stamp=stamp,
     )
     return 0
 
