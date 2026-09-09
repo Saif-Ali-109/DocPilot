@@ -724,11 +724,11 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
   rule 9, AGENT_LOOP_TOP_K 8→5, judge-skip default disabled).
   - classic complete: stamp `20260909_162036` classic sidecar recorded.
   - agentic half: walled by the on_demand TPD bucket on 2026-09-09 evening
-    (Used 198698–199964/200000 — probe + earlier attempts burned the window;
-    every agentic question needs ~2.6k+ tokens). Multi-window resume
-    (Phase-4 playbook): rerun with `--pipeline agentic --resume
-    20260909_162036` in a later window, then `--merge`. Table below fills in
-    when the agentic half lands.
+    (Used 198698–199940/200000 — probe + earlier attempts kept occupying the
+    window; every agentic question needs ~2.6k+ tokens, headroom stayed ≤
+    ~100). Multi-window resume (Phase-4 playbook): rerun with
+    `--pipeline agentic --resume 20260909_162036` in a later window, then
+    `--merge`. Table below fills in when the agentic half lands.
   - **before/after (classic only so far; agentic PENDING):**
 
     | metric | before classic | after classic | before agentic | after agentic |
