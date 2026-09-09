@@ -1,0 +1,53 @@
+{
+  "generated_at": "2026-09-09T09:12:51Z",
+  "source": "benchmark_20260908_190539.json (rescored 2026-09-09); benchmark.json gold",
+  "note": "SPEC \u00a76.4 / \u00a76.2 false-refusal 3-way decomposition on the committed 15-question benchmark. False refusal = gold says answerable (gold_refusal=False) but the pipeline refused. Decomposition assigns each false refusal to retrieval / judge / routing.",
+  "by_pipeline": {
+    "classic": {
+      "false_refusals": [
+        "bl01",
+        "bl03"
+      ],
+      "honest_refusals": [
+        "bn01",
+        "bn02",
+        "bn03"
+      ],
+      "decomposition": {
+        "routing_failure": [
+          "bl01",
+          "bl03"
+        ],
+        "retrieval_failure": [],
+        "judge_failure": []
+      }
+    },
+    "agentic": {
+      "false_refusals": [],
+      "honest_refusals": [
+        "bn01",
+        "bn02",
+        "bn03"
+      ],
+      "decomposition": {
+        "routing_failure": [],
+        "retrieval_failure": [],
+        "judge_failure": []
+      }
+    }
+  },
+  "summary": {
+    "classic": {
+      "false_refusal_n": 2,
+      "rate": "2/15"
+    },
+    "agentic": {
+      "false_refusal_n": 0,
+      "rate": "0/15"
+    },
+    "reading": "Classic's two refusals (bl01, bl03) are capability routing: live-state questions reach the no-tool fast path and are refused honestly given a docs-only corpus (docs contain no live issue/repo state). Agentic has zero false refusals; its tool fires instead. All neither/HR-questions refused honestly by both pipelines. Judge contributed zero false refusals."
+  },
+  "observations": [
+    "agentic bn03: judge requested the GitHub tool on an HR-news question (needless engagement \u2014 cost only, 1 wasted call), then the generator self-refused with the verbatim \u00a73.9 sentence on the answer path; final action correct. Cross-references tool_necessity 20260908_181226 (neither_fire_rate 0.2; judge neither-class needs_tool accuracy 0.8)."
+  ]
+}

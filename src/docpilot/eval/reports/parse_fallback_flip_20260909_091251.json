@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-09-09T09:12:51Z",
+  "decision": "KEEP",
+  "default": "sufficient",
+  "flip_conditions_checked": {
+    "live_parse_fallback_rate": {
+      "source": "benchmark_resume_agentic4.log (agentic half, 15 questions, ~30 judge calls)",
+      "count": 0
+    },
+    "calibration_parse_failure_rate": {
+      "source": "judge_ab_20260908_174922.json (24 labeled triples)",
+      "prompt_A": 0.0,
+      "prompt_B": 0.0
+    },
+    "generator_under_refusal": {
+      "observed": "None. bn03's generator self-refused with the verbatim \u00a73.9 sentence even on the answer path after the judge green-lit answering; the honesty gate demonstrably fires on weak evidence."
+    }
+  },
+  "reasoning": "Neither SPEC \u00a76.3 flip condition is met: parse-fallback rate is \u2248 0 across calibration (24 triples) and the live benchmark half, and the generator does not under-refuse. The defensive sufficient-default stays; the \u00a73.9 honesty gate remains the final safety layer.",
+  "side_effect_note": "bn03's needless tool engagement is a judge needs_tool false positive on the neither class (see false_refusals report), unrelated to the parse default; flipping the default would not change it."
+}
