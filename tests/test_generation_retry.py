@@ -36,9 +36,11 @@ class _FakeCompletions:
         # responses: list of Exception | str content, popped in order
         self._responses = list(responses)
         self.calls = 0
+        self.seen_contents = []
 
-    def create(self, **kwargs):  # noqa: ARG002 - fake API surface
+    def create(self, **kwargs):
         self.calls += 1
+        self.seen_contents.append(kwargs["messages"][0]["content"])
         r = self._responses.pop(0)
         if isinstance(r, Exception):
             raise r
@@ -170,6 +172,47 @@ class TestGenerateRetry:
         with pytest.raises(_BadRequest):
             gen.generate("hi")
         assert sleeps == []
+
+    def test_tool_use_glitch_retries_once_with_guard(self, monkeypatch):
+        """Hosted model emits a tool call with no tools declared (Groq 400
+        tool_use_failed) — retried once with a plain-prose guard appended."""
+        from docpilot.generation.generator import _TOOL_USE_GUARD_SUFFIX
+
+        class _ToolGlitch(Exception):
+            pass
+
+        glitch = _ToolGlitch(
+            "{'error': {'message': 'Tool choice is none, but model called a tool', "
+            "'type': 'invalid_request_error', 'code': 'tool_use_failed', "
+            "'failed_generation': '{\"name\": \"repo_browser.open_file\", ...}'}}"
+        )
+        glitch.status_code = 400
+        # second response is plain content
+        client = _FakeClient([glitch, "OK"])
+        gen = _gen([], max_retries=3)
+        gen._client = client  # noqa: SLF001 - test seam
+        assert gen.generate("hi") == "OK"
+        assert client.chat.completions.seen_contents == [
+            "hi",
+            "hi" + _TOOL_USE_GUARD_SUFFIX,
+        ]
+
+    def test_tool_use_glitch_exhausts_into_raise(self):
+        """Guard is applied exactly once; a persistent glitch fails fast."""
+        from docpilot.generation.generator import _TOOL_USE_GUARD_SUFFIX
+
+        class _ToolGlitch(Exception):
+            pass
+
+        glitch = _ToolGlitch("...code: 'tool_use_failed'...")
+        glitch.status_code = 400
+        gen = _gen([glitch, glitch], max_retries=3)
+        with pytest.raises(_ToolGlitch):
+            gen.generate("hi")
+        assert gen._client.chat.completions.seen_contents == [
+            "hi",
+            "hi" + _TOOL_USE_GUARD_SUFFIX,
+        ]
 
     def test_success_on_first_attempt_when_no_error(self, monkeypatch):
         sleeps = []

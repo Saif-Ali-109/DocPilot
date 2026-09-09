@@ -20,6 +20,14 @@ logger = logging.getLogger(__name__)
 # hanging the retry loop for ~3× the advertised wait.
 _RETRY_AFTER_MAX_SECONDS = 10.0
 
+# Appended to a prompt when the hosted model emits a tool call despite no
+# tools being declared (Groq 400 code tool_use_failed — "Tool choice is none,
+# but model called a tool"). A model-side glitch, retried once with this guard.
+_TOOL_USE_GUARD_SUFFIX = (
+    "\n\nRespond in plain prose only. Do not call any tools, do not emit "
+    "function-call JSON, and do not reference file paths or line ranges."
+)
+
 
 def _int_header(headers, name: str) -> int | None:
     """Parse an integer response header (Groq's x-ratelimit-* values)."""
@@ -105,13 +113,17 @@ class GroqGenerator(Generator):
         """Call the Groq chat completions API with retry/backoff.
 
         Retry only on transient failures (429, 5xx, connection errors).
-        Non-transient errors (4xx other than 429) are raised immediately.
+        Non-transient errors (4xx other than 429) are raised immediately —
+        except the hosted-model tool-use glitch (400 ``tool_use_failed``:
+        the model emits a tool call despite no tools being declared), which
+        is retried once with a plain-text guard appended.
 
         On a rate-limit error the server's ``retry-after`` is honored
         (bounded by ``_RETRY_AFTER_MAX_SECONDS``); without one, exponential
         jitter applies.
         """
         last_exc: Exception | None = None
+        effective_prompt = prompt
 
         for attempt in range(self._max_retries):
             try:
@@ -120,7 +132,7 @@ class GroqGenerator(Generator):
                     messages=[
                         {
                             "role": "system",
-                            "content": prompt,
+                            "content": effective_prompt,
                         },
                     ],
                     temperature=0,
@@ -129,6 +141,16 @@ class GroqGenerator(Generator):
 
             except Exception as exc:
                 last_exc = exc
+                if self._is_tool_use_glitch(exc) and effective_prompt is prompt:
+                    effective_prompt = prompt + _TOOL_USE_GUARD_SUFFIX
+                    logger.warning(
+                        "Groq tool-use glitch (attempt %d/%d): %s — retrying "
+                        "with plain-prose guard",
+                        attempt + 1,
+                        self._max_retries,
+                        exc,
+                    )
+                    continue
                 if self._is_transient(exc):
                     server_wait = self._server_retry_after(exc)
                     if server_wait is not None:
@@ -203,6 +225,24 @@ class GroqGenerator(Generator):
             return status in (429, 500, 502, 503, 504)
 
         return False
+
+    @staticmethod
+    def _is_tool_use_glitch(exc: Exception) -> bool:
+        """True for Groq 400 ``tool_use_failed`` — the hosted model emitted a
+        tool call although the request declared no tools and the server's
+        ``tool_choice`` is none. A model-side glitch (not a genuine bad
+        request); retried once with a plain-prose guard (2026-09-09 live
+        failure on the GroundingChecker NLI call).
+        """
+        status = getattr(exc, "status_code", None)
+        if status != 400:
+            return False
+        body = str(getattr(exc, "message", "") or exc)
+        return (
+            "tool_use_failed" in body
+            or "Tool choice is none" in body
+            or "model called a tool" in body
+        )
 
     @staticmethod
     def _server_retry_after(exc: Exception) -> float | None:
