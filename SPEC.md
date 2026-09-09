@@ -710,6 +710,17 @@ Only after the RAG/agent core is working and evaluated.
 
 **Amendment (2026-09-05):** Originally Streamlit. Swapped to Chainlit — it's built directly on FastAPI/Starlette (matching the async backend introduced at this phase rather than sitting beside it), has native token streaming, built-in citation elements, a built-in `Step` UI for showing intermediate tool/retrieval/agent steps (a natural fit for the Phase 2 `LoopTraceStep` trace), and built-in chat-history persistence (SQLite/Postgres) instead of hand-rolled session state. No functional requirement above changed — only the framework used to satisfy them.
 
+**Amendment (2026-09-09 — Phase 4 close-out, latency & citation hardening folded into Phase 5):** the §6.1 benchmark (stamp `20260908_190539`, rescored 2026-09-09) measured two weaknesses now in Phase 5 scope.
+
+- **Latency.** Agentic avg 31.9s vs classic 9.0s on the run path — sequential LLM steps (judge → generator → tool round-trips) on a free-tier model with full top-k contexts; classic is a single call. Phase 5 folds in:
+  1. streaming responses (perceived latency — first token in seconds);
+  2. judge/generator context shrink (top_k 8 → 4–5);
+  3. fast-path judge skip — the Phase 2 gate answers clearly-doc-answerable questions directly; the judge LLM call runs only when the gate signals uncertainty;
+  4. an operator-side model endpoint/tier knob (no design change) for per-call latency.
+- **Citation gold accuracy.** Both pipelines ≈0.53–0.58 (citation validity 1.0 both; the gap is ~1 marker — noise-adjacent; bd02 is 0.0 for both). Root cause: FastAPI docs duplicate content across files; the generator cites the file it read rather than the canonical one (bd05 cited the index page). Phase 5 folds in: source-kind metadata on `SourceRef` (reference/tutorial > how-to > index-overview) + a generator prompt preference for authoritative files, plus one targeted bd02 look.
+- **Evaluation gate (locked):** every latency/citation change lands behind a before/after §6.1 benchmark re-run — "faster/better" claims require the data, per §6.1. Streaming is UX-only and exempt from the run-path latency metric; context-shrink and judge-skip changes re-run the full 15-question set.
+- **Guardrail (unchanged):** this is Phase 5 scope — Phase 6 (code generation) stays locked out of the core loop; the fast/cheap path stays the default for doc-answerable queries (Phase 2 guardrail).
+
 **Guardrail:** Frontend polish never delays or distorts the RAG/agent core. This amendment does not pull Phase 5 work forward — Phase 2/3/4 still come first per §2's hard rules.
 
 ---

@@ -719,8 +719,12 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
     parse-fallbacks (agentic half), 0.0 calibration parse-failure rate (24
     triples, both prompts), no generator under-refusal observed (bn03
     self-refused with the verbatim §3.9 sentence).
-- follow-up (open): token accounting — generator discards Groq `usage`; record
-  per-call tokens in reports so quota economics are inspectable.
+- follow-up (open, Phase 5 scope): token accounting (record per-call `usage`);
+  latency/citation-gold hardening per SPEC §7 amendment 2026-09-09 — top_k
+  8→4–5, fast-path judge skip for clearly-doc questions, source-kind citation
+  preference (SourceRef metadata + generator prompt), model endpoint/tier
+  knob; each change re-validated on the 15-question benchmark (before/after
+  gate) except pure-UI streaming.
 - exit_criteria_progress: §6.4 — all four eval criteria now `[x]` in SPEC
   (comparison, false-refusal decomposition, parse-fallback flip check, plus
   the earlier judge-calibration + tool-necessity reports). Phase-4 milestone
