@@ -3,6 +3,7 @@
 Examples:
     python -m docpilot ingest [--debug]
     python -m docpilot ask "How do I install FastAPI?" [--debug] [--json]
+    python -m docpilot dedupe [--dry-run]
 
 Exit codes: 0 success, 1 runtime error, 2 usage error (see cli.main).
 """

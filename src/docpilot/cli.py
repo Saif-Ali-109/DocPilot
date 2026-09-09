@@ -5,6 +5,7 @@ Usage::
     python -m docpilot ingest [--debug]
     python -m docpilot ask "QUESTION" [--debug] [--json] [--lang LANGUAGE]
                                      [--strategy auto|direct|agentic]
+    python -m docpilot dedupe [--dry-run]
 
 Stream discipline:
     * **stdout** carries only program output — the answer (plain mode), the
@@ -50,6 +51,7 @@ _INGEST_INJECTION_KEYS = (
     "vector_store",
 )
 _ASK_INJECTION_KEYS = ("retriever", "generator", "citation_engine", "judge", "tool")
+_DEDUPE_INJECTION_KEYS = ("conn",)
 
 
 def _configure_logging(debug: bool) -> None:
@@ -112,6 +114,16 @@ def _build_parser() -> argparse.ArgumentParser:
             "'direct' forces the Phase 1 fast path; 'agentic' forces the loop; "
             "'auto' lets the heuristic gate decide."
         ),
+    )
+
+    dedupe_p = sub.add_parser(
+        "dedupe",
+        help="Clean duplicate chunk rows from the vector store (corpus maintenance).",
+    )
+    dedupe_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report how many duplicate rows exist without deleting anything.",
     )
 
     return parser
@@ -185,6 +197,40 @@ def _run_ask(args: argparse.Namespace, injected: dict[str, Any]) -> int:
     return 0
 
 
+def _run_dedupe(args: argparse.Namespace, injected: dict[str, Any]) -> int:
+    """Remove legacy duplicate ``chunks`` rows, then apply the unique index.
+
+    Connects to PostgreSQL (or uses an injected ``conn`` for tests), cleans
+    the ``chunks`` table and ensures the schema so ``chunks_unique_triple``
+    is created. ``--dry-run`` only reports the duplicate count.
+    """
+    from docpilot.db import maintenance
+    from docpilot.db.connection import ensure_schema, get_connection
+
+    conn = injected.get("conn")
+    owned = conn is None
+    if owned:
+        conn = get_connection()
+    try:
+        dupes = maintenance.count_duplicate_rows(conn)
+        if args.dry_run:
+            print(f"Would delete {dupes} duplicate chunk row(s)")
+            return 0
+        deleted = maintenance.dedupe_chunks(conn)
+        conn.commit()
+        # Apply the unique index (chunks_unique_triple) now that the table is clean.
+        ensure_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM chunks")
+            (total,) = cur.fetchone()
+        logger.info("Dedupe complete: removed %d duplicate row(s)", deleted)
+        print(f"Removed {deleted} duplicate chunk row(s); {total} chunks remain")
+        return 0
+    finally:
+        if owned:
+            conn.close()
+
+
 def main(argv: list[str] | None = None, **injected: Any) -> int:
     """CLI entry point.
 
@@ -210,6 +256,8 @@ def main(argv: list[str] | None = None, **injected: Any) -> int:
             return _run_ingest(args, injected)
         if args.command == "ask":
             return _run_ask(args, injected)
+        if args.command == "dedupe":
+            return _run_dedupe(args, injected)
     except Exception as exc:  # noqa: BLE001 — CLI boundary: surface any failure.
         logger.error("Command failed: %s", exc)
         print(f"Error: {exc}", file=sys.stderr)

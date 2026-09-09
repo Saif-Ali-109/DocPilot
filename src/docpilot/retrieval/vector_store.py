@@ -88,6 +88,12 @@ class PgVectorStore(VectorStore):
 
         Each chunk's deterministic ``chunk.id`` string is stored in the
         ``metadata`` JSONB column under key ``"chunk_id"``.
+
+        Inserts are conflict-tolerated: a row whose ``(source_file,
+        heading_path, chunk_index)`` triple already exists is skipped
+        (``ON CONFLICT DO NOTHING``) rather than duplicating the chunk.
+        Combined with the ``chunks_unique_triple`` unique index this makes
+        ingest idempotent even under a delete/insert race (PLAN.md §6).
         """
         if len(chunks) != len(embeddings):
             raise ValueError(
@@ -97,6 +103,7 @@ class PgVectorStore(VectorStore):
             INSERT INTO chunks (content, heading_path, source_file, chunk_index,
                                 language, metadata, embedding)
             VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
+            ON CONFLICT DO NOTHING
         """
         rows = []
         for chunk, emb in zip(chunks, embeddings):
@@ -124,6 +131,14 @@ class PgVectorStore(VectorStore):
         Cosine distance is computed via pgvector's ``<=>`` operator.
         Similarity = 1 - distance.  Results are ordered DESC by similarity.
 
+        A slightly wider window (``top_k * 2``) is fetched and rows whose
+        ``(source_file, heading_path, chunk_index)`` triple was already seen
+        are dropped, keeping the highest-scoring copy. This guarantees a
+        duplicate chunk can never consume two top-k slots even if the table
+        ever holds twin rows again (they cannot — see ``chunks_unique_triple``;
+        this is a defensive safety net). With no duplicates the result set is
+        identical to a plain ``LIMIT top_k`` query.
+
         Args:
             query_embedding: The query vector.
             top_k: Maximum results to return.
@@ -131,6 +146,7 @@ class PgVectorStore(VectorStore):
                 column matches this value. ``None`` disables filtering.
         """
         q = query_embedding.tolist()
+        window = top_k * 2
         if language is not None:
             sql = """
                 SELECT content, heading_path, source_file, chunk_index, metadata,
@@ -140,7 +156,7 @@ class PgVectorStore(VectorStore):
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
             """
-            params = (q, language, q, top_k)
+            params = (q, language, q, window)
         else:
             sql = """
                 SELECT content, heading_path, source_file, chunk_index, metadata,
@@ -149,13 +165,15 @@ class PgVectorStore(VectorStore):
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
             """
-            params = (q, q, top_k)
+            params = (q, q, window)
         with self._conn.cursor() as cur:
             cur.execute(sql, params)
             rows = cur.fetchall()
 
         results: list[RetrieverResult] = []
-        for content, heading_path, source_file, chunk_index, metadata, similarity in rows:
+        for content, heading_path, source_file, chunk_index, metadata, similarity in _first_distinct_rows(
+            rows, top_k
+        ):
             # Recover the deterministic chunk_id from metadata if present
             meta = _parse_metadata(metadata)
             chunk_id = meta.pop("chunk_id", "")
@@ -212,3 +230,24 @@ def _parse_metadata(raw) -> dict:
     if isinstance(raw, str):
         return json.loads(raw)
     return {}
+
+
+def _first_distinct_rows(rows: list[tuple], top_k: int) -> list[tuple]:
+    """Keep the first occurrence of each ``(source_file, heading_path, chunk_index)``.
+
+    ``rows`` is expected ordered by descending similarity, so the first
+    occurrence of a triple carries its highest score. Used by
+    :meth:`PgVectorStore.search` as a defensive dedupe net; with no duplicate
+    triples it returns ``rows[:top_k]`` unchanged.
+    """
+    seen: set[tuple] = set()
+    out: list[tuple] = []
+    for row in rows:
+        key = (row[2], row[1], row[3])  # source_file, heading_path, chunk_index
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+        if len(out) >= top_k:
+            break
+    return out

@@ -151,7 +151,7 @@ def create_app(
 async def _chat_stream(body: ChatRequest, *, store: SessionStore, engine: Callable[..., dict]):
     """Run the question in a worker thread, bridge emit events to the SSE
     stream, persist the exchange into the session store on completion."""
-    queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=256)
+    queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=2048)
     loop = asyncio.get_running_loop()
     result: dict = {}
 

@@ -63,7 +63,7 @@ async def on_message(message: cl.Message) -> None:
     answer_msg = cl.Message(content="")
     await answer_msg.send()
 
-    queue: asyncio.Queue = asyncio.Queue(maxsize=256)
+    queue: asyncio.Queue = asyncio.Queue(maxsize=2048)
     loop = asyncio.get_running_loop()
 
     def emit(data: dict) -> None:

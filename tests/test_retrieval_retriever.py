@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from docpilot.core.models import Chunk, RetrieverResult
-from docpilot.retrieval.vector_store import VectorStore
+from docpilot.retrieval.vector_store import VectorStore, _first_distinct_rows
 from docpilot.retrieval.retriever import SimpleRetriever, Retriever
 
 
@@ -250,6 +250,49 @@ class TestRetrieverInterface:
 
 
 # ======================================================================
+# Dedupe helper (_first_distinct_rows) — unit tests, no DB
+# ======================================================================
+
+def _fake_row(file: str, heading: str, chunk_index: int, similarity: float = 0.9) -> tuple:
+    """Row tuple in the shape search() passes to _first_distinct_rows."""
+    return ("content", heading, file, chunk_index, "{}", similarity)
+
+
+class TestFirstDistinctRows:
+    def test_no_duplicates_trims_to_top_k(self) -> None:
+        rows = [_fake_row("a.md", "H1", 0), _fake_row("a.md", "H1", 1), _fake_row("b.md", "H2", 0)]
+        assert _first_distinct_rows(rows, top_k=2) == rows[:2]
+
+    def test_duplicate_triple_keeps_first_occurrence(self) -> None:
+        rows = [
+            _fake_row("a.md", "H1", 0, 0.9),
+            _fake_row("a.md", "H1", 0, 0.7),  # twin (same triple, lower score)
+            _fake_row("a.md", "H1", 1, 0.5),
+        ]
+        out = _first_distinct_rows(rows, top_k=2)
+        assert len(out) == 2
+        assert out[0] == rows[0]  # highest-scoring copy kept
+        assert out[1] == rows[2]
+
+    def test_same_heading_different_index_are_distinct(self) -> None:
+        rows = [_fake_row("a.md", "H1", 0), _fake_row("a.md", "H1", 1)]
+        assert len(_first_distinct_rows(rows, top_k=5)) == 2
+
+    def test_same_triple_in_different_files_are_distinct(self) -> None:
+        rows = [_fake_row("a.md", "H1", 0), _fake_row("b.md", "H1", 0)]
+        assert len(_first_distinct_rows(rows, top_k=5)) == 2
+
+    def test_more_duplicates_than_top_k_still_returns_top_k_distinct(self) -> None:
+        rows = [
+            _fake_row("a.md", "H1", 0),
+            _fake_row("a.md", "H1", 0),
+            _fake_row("a.md", "H1", 1),
+        ]
+        out = _first_distinct_rows(rows, top_k=5)
+        assert len(out) == 2  # only 2 distinct triples exist
+
+
+# ======================================================================
 # Optional: PgVectorStore integration test (skipped without PostgreSQL)
 # ======================================================================
 
@@ -289,7 +332,12 @@ class TestPgVectorStoreIntegration:
         if getattr(self, "_store", None) is not None:
             try:
                 self._store.delete_by_source(
-                    ["_integration_test.md", "_integration_del.md", "_integration_search.md"]
+                    [
+                        "_integration_test.md",
+                        "_integration_del.md",
+                        "_integration_search.md",
+                        "_integration_dup.md",
+                    ]
                 )
             except Exception:
                 pass
@@ -325,3 +373,67 @@ class TestPgVectorStoreIntegration:
         results = self._store.search(q, top_k=2)
         assert len(results) >= 1
         assert results[0].chunk.content == "hello world"
+
+    def test_add_skips_duplicate_triple(self) -> None:
+        """The unique triple + ON CONFLICT DO NOTHING make add() idempotent."""
+        self._store.delete_by_source(["_integration_dup.md"])
+        provider = FakeEmbeddingProvider()
+        emb = provider.embed(["dup guard test"])
+        self._store.add(
+            [
+                Chunk(
+                    id="dg-0",
+                    content="dup guard test",
+                    source_file="_integration_dup.md",
+                    chunk_index=0,
+                )
+            ],
+            emb,
+        )
+        # Re-adding the SAME triple (with different content) must be skipped.
+        self._store.add(
+            [
+                Chunk(
+                    id="dg-1",
+                    content="VERY DIFFERENT",
+                    source_file="_integration_dup.md",
+                    chunk_index=0,
+                )
+            ],
+            provider.embed(["VERY DIFFERENT"]),
+        )
+        results = self._store.search(emb[0], top_k=5)
+        mine = [r for r in results if r.chunk.source_file == "_integration_dup.md"]
+        assert len(mine) == 1
+        assert mine[0].chunk.content == "dup guard test"
+
+    def test_search_deduplicates_twin_rows(self) -> None:
+        """With legacy twin rows present, search returns the triple once.
+
+        Uses a transaction: the unique index is dropped inside it so twins
+        can be inserted, then everything is rolled back (index restored,
+        table untouched).
+        """
+        src = "_integration_search.md"
+        self._store.delete_by_source([src])
+        conn = self._conn
+        conn.autocommit = False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DROP INDEX IF EXISTS chunks_unique_triple")
+            insert_sql = """
+                INSERT INTO chunks (source_file, heading_path, chunk_index,
+                                    content, language, metadata, embedding)
+                SELECT %s, 'Twin', 0, 'twin search payload', 'en', '{}',
+                       ARRAY(SELECT 0.25 FROM generate_series(1, 384))::vector
+                FROM generate_series(1, 2)
+            """
+            with conn.cursor() as cur:
+                cur.execute(insert_sql, (src,))
+            q = np.full(384, 0.25, dtype=np.float32)
+            results = self._store.search(q, top_k=5)
+            mine = [r for r in results if r.chunk.source_file == src]
+            assert len(mine) == 1, "twin rows must not occupy two top-k slots"
+            assert mine[0].chunk.heading_path == "Twin"
+        finally:
+            conn.rollback()

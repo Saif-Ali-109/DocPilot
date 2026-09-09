@@ -43,6 +43,15 @@ class TestSchemaRequiredElements:
         assert "language" in schema_sql
         assert "language      TEXT NOT NULL DEFAULT 'en'" in schema_sql
 
+    def test_unique_triple_index(self, schema_sql: str) -> None:
+        """Phase 5 hardening: a btree unique index over the logical chunk triple.
+
+        Prevents the historical double-insert symptom (two ingest runs
+        inserting the same source_file + heading_path + chunk_index).
+        """
+        assert "CREATE UNIQUE INDEX IF NOT EXISTS chunks_unique_triple" in schema_sql
+        assert "ON chunks (source_file, heading_path, chunk_index)" in schema_sql
+
 
 # ---- Forbidden elements: NO ANN index in Phase 1 ----
 
