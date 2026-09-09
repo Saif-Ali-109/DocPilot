@@ -622,23 +622,37 @@ against strings that actually occur in `source_files`.
   the judge judging honestly. Resolved by the 3-way decomposition eval, not by
   re-running one question ad hoc.
 - The judge parse-fallback default stays `sufficient` (the generator's §3.9
-  honesty gate remains the final safety layer) **pending this evaluation**. Flip
-  conditions, shown only by Phase 4 data: a non-trivial live parse-fallback rate
-  (made measurable by the agreed judge fallback counter once Phase 4 monitoring
-  lands), or the generator under-refusing on weak evidence.
+  honesty gate remains the final safety layer) **resolved by the flip-condition
+  check (2026-09-09): KEEP**. Flip conditions, per Phase 4 data: a non-trivial
+  live parse-fallback rate (made measurable by the judge fallback counter), or
+  the generator under-refusing on weak evidence. The check measured 0 live
+  parse-fallbacks and a 0.0 calibration parse-failure rate, and observed the
+  generator self-refusing with the verbatim §3.9 sentence on weak evidence
+  (benchmark bn03) — neither condition met. Evidence: `parse_fallback_flip_
+  20260909_091251.json` (SPEC §6.4).
 
 ### 6.4 Exit criteria (Phase 4)
 
-- [x] Benchmark dataset committed: labeled verdict triples, adversarial
-      paraphrases, tool-necessity tri-class gold labels.
-- [ ] Classic-RAG vs. agentic-RAG comparison on all §6.1 metrics, one table.
-- [ ] False-refusal decomposition (retrieval / judge / routing) on the benchmark.
+- [x] Classic-RAG vs. agentic-RAG comparison on all §6.1 metrics, one table.
+      **Run 2026-09-08/09, rescored 2026-09-09** — `src/docpilot/eval/reports/
+      benchmark_20260908_190539.json` (combined + sidecars; see PLAN §5.3 for
+      the table and reading).
+- [x] False-refusal decomposition (retrieval / judge / routing) on the benchmark.
+      **Run 2026-09-09** — `src/docpilot/eval/reports/
+      false_refusals_20260909_091251.json`: 0 false refusals agentic,
+      2/15 classic (bl01/blob03 — capability-routing: live-state questions hit
+      the no-tool fast path), 0 judge-caused; all HR/neither refusals honest.
 - [x] Judge calibration report: verdict accuracy, adversarial robustness,
       parse-failure rate, and the two-prompt A/B result.
 - [x] Tool-necessity report: false-positive / false-negative rates on the
       tri-class set.
-- [ ] Parse-fallback flip-condition check run, with the keep-vs-flip decision
-      recorded.
+- [x] Parse-fallback flip-condition check run, with the keep-vs-flip decision
+      recorded. **Run 2026-09-09** — decision **KEEP** the defensive
+      `sufficient` default: 0 live judge parse-fallbacks (16-question agentic
+      half) and 0.0 calibration parse-failure rate (24 triples, both prompts),
+      and the generator's §3.9 honesty gate demonstrably refused on weak
+      evidence (bn03). Evidence: `src/docpilot/eval/reports/
+      parse_fallback_flip_20260909_091251.json`.
 
 ### 6.5 Live-run protocol & quota resilience (amended 2026-09-08, user sign-off)
 

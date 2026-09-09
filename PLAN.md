@@ -15,7 +15,8 @@
     optional code validation → extract reusable framework components.
     Do not skip ahead. Do not let later phases' ambitions leak into earlier
     phases' scope.
-- current_phase: 3
+- current_phase: 4 (Phase 5 NOT started — §6 guardrail: frontend polish never
+  delays or reshapes the RAG/agent core; Phase 4 owes no further work)
 - working_repo: https://github.com/Saif-Ali-109/DocPilot.git
 - working_dir: /home/ain/Desktop/RAG
 - spec_source_of_truth: >
@@ -545,13 +546,12 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
   default), commit-author evidence completeness. Judge parse-fallback counter
   wired (SPEC §6.3) — `_record_parse_fallback` INFO lines, hermetic tests.
 
-## 5. phase_4: "Evaluation"
-- status: IN PROGRESS (2026-09-08) — slices 1–2 complete (judge two-prompt A/B,
-  tool-necessity tri-class). Slice 3 (classic-vs-agentic §6.1 comparison) in
-  progress: classic half complete + committed (stamp 190539, post-fix scoring),
-  agentic half blocked on a fresh-quota Groq key (daily TPD exhausted on the
-  current org); resume + L2 quota insurance agreed (SPEC §6.5). Then:
-  false-refusal decomposition, parse-fallback flip-condition check.
+## 5. phase_4: "Evaluation" — COMPLETE 2026-09-09 (milestone `phase-4`)
+- status: COMPLETE (milestone `phase-4` cut 2026-09-09). Slices: (1) judge
+  two-prompt A/B, (2) tool-necessity tri-class, (3) classic-vs-agentic §6.1
+  comparison (rescored 2026-09-09 — see §5.3), (4) false-refusal 3-way
+  decomposition, (5) judge calibration + parse-fallback flip-condition check
+  (KEEP, recorded). All §6.4 exit criteria `[x]` in SPEC.
 - summary: >
     Build a benchmark dataset and track: retrieval quality, answer correctness,
     citation correctness, groundedness/hallucination rate, "I don't know"
@@ -633,71 +633,98 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
   (2026-09-08). Remaining: §6.1 classic-vs-agentic comparison, false-refusal
   decomposition, parse-fallback flip-condition check.
 
-### 5.3 slice_3 classic-vs-agentic §6.1 comparison (2026-09-08 — in progress)
+### 5.3 slice_3 classic-vs-agentic §6.1 comparison (2026-09-08/09 — DONE ✓)
 - dataset: `src/docpilot/eval/dataset/benchmark.json` — 15 questions (8
   docs-answerable / 4 live-state-answerable / 3 neither). Gold key facts are
-  short paraphrase-robust fragments; gold sources are stored corpus-relative
-  paths (post-fix v2, commit 08086dd).
+  short paraphrase-robust fragments (v3 — 2026-09-09: bd02/bd06 facts were
+  still corpus-strict, e.g. `type annotation` penalizing the correct
+  paraphrase `type hint`; replaced with invariants both live pipelines
+  satisfy); gold sources are stored corpus-relative paths (commit 08086dd).
 - harness: `src/docpilot/eval/benchmark.py` — `run_pipeline`, injectable
   `GroundingChecker` (NLI-style proxy over `Generator.generate`, callable
   form), per-half sidecar checkpointing, `--pipeline {classic,agentic}` /
   `--resume STAMP` / `--merge DIR STAMP`, one-table comparison builder.
-  334 hermetic tests.
+  364 hermetic tests.
 - scoring-fix root cause: the first live run scored 0.00 across ALL doc rows;
   the sidecar audit showed retrieval hit the correct files and every answer
   was correct. Two gold-data defects, not system failures: (1) gold paths
   carried a `docs/` filesystem prefix the vector store never emits
-  (`en/docs/...`), zeroing recall + citation-gold; (2) verbatim corpus
-  sentences as gold facts — the generator paraphrases by design, so sentence
-  containment penalized correct answers. Fixed to stored paths + fragment
-  facts; offline re-scoring of the completed run validated the fix (recall@k
-  1.0000 for both pipelines) before any rerun.
+  (`en/docs/...`); (2) verbatim corpus sentences as gold facts — the generator
+  paraphrases by design. Fixed to stored paths + fragment facts (v2), then
+  v3 (see above).
 - live runs: stamp `20260908_184441` completed BOTH pipelines pre-fix
-  (superseded scoring); stamp `20260908_190539` reran post-fix — classic
-  complete + committed (`benchmark_20260908_190539_classic.json`), agentic
-  crashed mid-run on daily quota (TPD limit 200000, Used 199443).
-- classic half (stamp 190539, post-fix scoring):
-  | metric | value |
-  | --- | --- |
-  | answer_correctness | 0.8000 |
-  | retrieval recall@k (docs) | 1.0000 |
-  | citation validity | 1.0000 |
-  | citation gold accuracy (docs) | 0.5833 |
-  | refusal accuracy (I-don't-know) | 1.0000 |
-  | groundedness (NLI proxy) | 0.7000 |
-  | avg latency | 9046 ms |
-  | retrieval calls / tool calls | 1.0000 / 0 |
-- blocked on: fresh-quota Groq key (decision, user): swap org → resume agentic
-  half (`--pipeline agentic --resume 20260908_190539`) → auto-merge under the
-  same stamp → §6.1 one-table comparison. Fallback if quota never materializes
-  (not preferred): labeled two-run table using the completed pre-fix agentic
-  sidecar, documented caveat.
-- agreed insurance (user sign-off → SPEC §6.5): generator honors server
-  `retry-after` on 429 (self-heals TPM bursts) + `--probe` headroom gate
-  before launch. L3 per-question checkpointing considered and declined for now.
-- live-run log 2026-09-08 (evening): first agentic-resume attempt after the
-  swap crashed on the SAME daily wall — org `org_01m20m0fsdezntz1sgqpmdzfm2`,
-  Used 199455/200000, first answer call Requested 2700. Root cause: the swap
-  landed on the same org's bucket (Used 199455 vs 199443 at the original
-  crash), and the then-current probe passed because a tiny call fit the ~300
-  remaining tokens. Probe then redesigned (commit pending) after two live
-  experiments: (1) Groq only exposes per-minute buckets in headers
-  (`x-ratelimit-*-tokens` = 8000/min) — no TPD header exists; (2) TPD is not
-  gated at admission either — a 16k-`max_tokens` probe was admitted and served
-  ~18k output tokens on the same near-empty org. Conclusion recorded in SPEC
-  §6.5: TPD headroom is NOT introspectable; `--probe` is a functional gate
-  (auth/model/call + per-minute headroom) and daily-bucket viability is an
-  operator assertion backed by per-half checkpointing + resume-at-stamp +
-  retry-after fail-fast. The org is slowly refilling as its 24h window slides
-  (admitted ~18k just now) but cannot support a full ~60–90k agentic half yet.
-  Resume reruns wholesale under stamp 190539 once a genuinely fresh org /
-  upgraded tier or window-slide headroom is available.
-- follow-up: token accounting — generator discards Groq `usage`; record
+  (superseded); stamp `20260908_190539` reran post-fix — classic complete on
+  2026-09-08, agentic resumed in later windows (2026-09-09) and completed.
+- **Final §6.1 one-table comparison** (`benchmark_20260908_190539.json`,
+  rescored 2026-09-09 under gold-v3 + §3.9 refusal-text fallback + bd05
+  regeneration — see notes below):
+
+  | metric | classic | agentic | winner |
+  | --- | --- | --- | --- |
+  | answer_correctness | 0.8000 | **0.9667** | agentic |
+  | retrieval recall@k (docs) | 1.0000 | 1.0000 | tie |
+  | citation validity | 1.0000 | 1.0000 | tie |
+  | citation gold accuracy (docs) | **0.5833** | 0.5312 | classic |
+  | refusal accuracy (I-don't-know) | 1.0000 | 1.0000 | tie |
+  | groundedness (NLI proxy) | **0.7000** | 0.5000 | classic |
+  | avg latency | **9046 ms** | 31862 ms | classic |
+  | avg retrieval calls | **1.0000** | 1.1333 | classic |
+  | avg tool calls | **0.0000** | 0.2667 | classic |
+
+  Tally **5 classic / 1 agentic / 3 ties** — neither pipeline dominates.
+- **Reading (data-backed, the phase's honest verdict):** the agent layer is
+  NOT net-positive on this dataset, and its one clear win is exactly what it
+  was built for — live-state coverage. Agentic fires the GitHub tool on 3/4
+  live questions and scores those 1.0 (classic has no tool and structurally
+  cannot; it refuses and gets 0.0/0.5), pulling agentic correctness to 0.9667
+  vs 0.8000. But agentic pays for it: 3.5× latency (31.9s vs 9.0s avg), a
+  weaker groundedness audit (0.50 vs 0.70 — its live-evidence answers audit
+  as ungrounded at the NLI proxy), slightly worse citation-gold precision,
+  and needless tool engagement on one HR question (bn03, see observations).
+  Simple doc questions cost the loop 1.5–2× the latency with no quality
+  margin — the strong argument for keeping the fast/cheap path default for
+  doc-answerable queries.
+- **Artifacts corrected before scoring (all measurement bugs, not system
+  behavior — full provenance in the report notes):**
+  1. gold v3 (bd02/bd06) applied to BOTH pipelines; classic control
+     bit-identical apart from the note.
+  2. §3.9 refusal-text fallback in `run_pipeline`: bn03 emitted the verbatim
+     refusal sentence (generator self-refused on the answer path after a
+     needless tool call) but the flag was False — counted as refused now.
+  3. bd05's completion was empty (model-side glitch); regenerated live under
+     the empty-completion retry fix (new answer 1.0 facts, grounded False).
+- live-run log (2026-09-09, multi-window resume of the agentic half):
+  - probe Sep-09: functional gate exit 0 (per-minute 5878/8000) — overnight
+    24h-window slide had freed the org's daily bucket (rolling windows, no
+    midnight reset).
+  - resume #2 (evening 09-08) had died on the same TPD wall (Used 199916–
+    199964/200000, ~36–84 tokens headroom); retry-after cap proved: server
+    waits "19m6s / 7m52s / 9m7s" → all slept 10.0s, fail-fast works.
+  - resume #3 (09-09): crashed on a NEW non-quota failure — Groq 400
+    `tool_use_failed`: the hosted model emitted `repo_browser.open_file`
+    despite no tools declared. GroundingChecker's plain NLI prompt was the
+    victim. Fixed (fe2c238): retry exactly once with a plain-prose guard
+    (applies to judge/generator/grounding alike).
+  - resume #4: **exit 0** — agentic half complete under stamp 190539.
+  - bd05 regen + offline rescore (no quota beyond 1 question + 1 NLI audit).
+- **Slices completed (2026-09-09, both report JSONs committed):**
+  - False-refusal 3-way decomposition (`false_refusals_20260909_091251.json`):
+    0 false refusals agentic; classic 2/15 (bl01, bl03 — capability routing:
+    live-state questions reach the no-tool fast path; retrieval genuinely
+    insufficient for docs-only); 0 judge-caused; all HR/neither refusals
+    honest. Observation: bn03's needless tool engagement cross-validates the
+    tool-necessity neither_fire_rate 0.2.
+  - Parse-fallback flip-condition check (`parse_fallback_flip_20260909_
+    091251.json`): **KEEP** the defensive `sufficient` default — 0 live
+    parse-fallbacks (agentic half), 0.0 calibration parse-failure rate (24
+    triples, both prompts), no generator under-refusal observed (bn03
+    self-refused with the verbatim §3.9 sentence).
+- follow-up (open): token accounting — generator discards Groq `usage`; record
   per-call tokens in reports so quota economics are inspectable.
-- exit_criteria_progress: §6.4 "classic-vs-agentic comparison" → in progress
-  (classic half + table machinery done; agentic half pending quota). After
-  this slice: false-refusal decomposition, parse-fallback flip-condition
-  check.
+- exit_criteria_progress: §6.4 — all four eval criteria now `[x]` in SPEC
+  (comparison, false-refusal decomposition, parse-fallback flip check, plus
+  the earlier judge-calibration + tool-necessity reports). Phase-4 milestone
+  tagged `phase-4`.
 
 ## 6. phase_5: "API + UI"
 - status: PLANNED
