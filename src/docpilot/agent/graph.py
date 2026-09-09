@@ -59,7 +59,7 @@ from docpilot.agent.types import (
     dict_to_tool_result,
     tool_result_to_dict,
 )
-from docpilot.core.models import Chunk, RetrieverResult, SourceRef
+from docpilot.core.models import Chunk, RetrieverResult, SourceRef, derive_source_kind
 from docpilot.generation.prompts import SYSTEM_PROMPT, format_sources
 from docpilot.pipeline_ask import _NO_CONTEXT_NOTE
 from docpilot.tools import ToolRequest, ToolResult
@@ -99,12 +99,17 @@ def dict_to_result(d: dict) -> RetrieverResult:
 
 def source_to_dict(s: SourceRef) -> dict:
     """Serialise a :class:`SourceRef` to a plain dict for graph state."""
-    return {"ref": s.ref, "file": s.file, "heading": s.heading}
+    return {"ref": s.ref, "file": s.file, "heading": s.heading, "kind": s.kind}
 
 
 def dict_to_source(d: dict) -> SourceRef:
     """Rebuild a :class:`SourceRef` from a graph-state dict."""
-    return SourceRef(ref=d["ref"], file=d["file"], heading=d.get("heading"))
+    return SourceRef(
+        ref=d["ref"],
+        file=d["file"],
+        heading=d.get("heading"),
+        kind=d.get("kind"),
+    )
 
 
 def trace_step_to_dict(step: LoopTraceStep) -> dict:
@@ -143,6 +148,8 @@ def make_nodes(
     top_k: int,
     language: str | None,
     tool=None,
+    emit=None,
+    judge_skip_score: float = 0.0,
 ) -> dict[str, object]:
     """Build the graph's node callables bound to the injected components.
 
@@ -154,7 +161,22 @@ def make_nodes(
         tool: An optional :class:`~docpilot.tools.base.Tool` (Phase 3). When
             ``None`` no ``tool_call`` node is produced and the judge is told
             tools are unavailable — the graph is Phase 2-identical.
+        emit: An optional live-view callback ``emit(event: dict)`` (Phase 5,
+            SPEC §7).  ``None`` → zero behaviour change (the CLI/eval never
+            pass one).  When set, every node emits ``{"type": "step", "step":
+            <trace-step dict>}`` as it completes, and the answer node streams
+            answer deltas as ``{"type": "token", "delta": ...}`` when the
+            generator supports streaming.
+        judge_skip_score: Phase 5 hardening (SPEC §7).  ``0.0`` (default) →
+            the judge always runs after retrieve (Phase 2/4 behaviour).  When
+            ``> 0``, the retrieve node marks ``skip_judge`` when the top
+            retrieval score clears the threshold; the router answers directly
+            without the judge LLM call.
     """
+
+    def _emit_step(step: LoopTraceStep) -> None:
+        if emit is not None:
+            emit({"type": "step", "step": trace_step_to_dict(step)})
 
     def retrieve_node(state: AgentLoopState) -> dict:
         started = time.perf_counter()
@@ -173,6 +195,7 @@ def make_nodes(
                 ref=i + 1,
                 file=r.chunk.source_file,
                 heading=r.chunk.heading_path or None,
+                kind=derive_source_kind(r.chunk.source_file),
             )
             for i, r in enumerate(results)
         ]
@@ -184,12 +207,23 @@ def make_nodes(
             f"top scores: {top_scores}"
         )
         step = LoopTraceStep.new("search", query, "retrieved", detail=detail, started_at=started)
+        _emit_step(step)
         trace: list[dict] = list(state["trace"]) + [trace_step_to_dict(step)]
 
+        # Phase 5 judge skip: when a threshold is configured and the strongest
+        # retrieved chunk clears it, skip the judge LLM call (evidence is
+        # plainly sufficient).  Stored in state so the router + answer node
+        # can act on it without an extra edge.
+        skip_judge = bool(
+            judge_skip_score > 0
+            and results
+            and results[0].score >= judge_skip_score
+        )
         return {
             "results": [result_to_dict(r) for r in results],
             "sources": [source_to_dict(s) for s in sources],
             "trace": trace,
+            "skip_judge": skip_judge,
         }
 
     def judge_node(state: AgentLoopState) -> dict:
@@ -240,6 +274,7 @@ def make_nodes(
                 else f"insufficient/retry-{attempts}"
             )
         step = LoopTraceStep.new("judge", query_used, decision, detail=detail, started_at=started)
+        _emit_step(step)
         trace: list[dict] = list(state["trace"]) + [trace_step_to_dict(step)]
 
         update: dict = {
@@ -270,6 +305,7 @@ def make_nodes(
             step = LoopTraceStep.new(
                 "tool_call", query, "tool_error", detail=message, started_at=started
             )
+            _emit_step(step)
             return {
                 "tool_error": message,
                 "tool_request": None,
@@ -311,6 +347,7 @@ def make_nodes(
                             heading=item.get("title")
                             or item.get("message_first_line")
                             or None,
+                            kind=derive_source_kind(str(label)),
                         )
                     )
                 )
@@ -318,6 +355,7 @@ def make_nodes(
             step = LoopTraceStep.new(
                 "tool_call", query, "tool_call", detail=detail, started_at=started
             )
+            _emit_step(step)
             return {
                 "sources": sources,
                 "tool_results": list(state.get("tool_results", []))
@@ -332,6 +370,7 @@ def make_nodes(
         step = LoopTraceStep.new(
             "tool_call", query, "tool_error", detail=detail, started_at=started
         )
+        _emit_step(step)
         return {
             "tool_error": message,
             "trace": trace_so_far + [trace_step_to_dict(step)],
@@ -368,15 +407,40 @@ def make_nodes(
             context_text = "\n\n".join(parts)
 
         sources_text = format_sources(sources)
-        raw_response = generator.generate_answer(
-            context_text, sources_text, state["original_question"]
-        )
+
+        # Phase 5 streaming (SPEC §7): when the caller passed an emit hook and
+        # the generator supports streaming, stream the answer deltas live
+        # (token events) and use the buffered text as raw_response.  Without a
+        # hook this is byte-identical Phase 2/4: one generate_answer call.
+        raw_response = None
+        if emit is not None and callable(
+            getattr(generator, "generate_answer_stream", None)
+        ):
+            try:
+                parts: list[str] = []
+                for delta in generator.generate_answer_stream(
+                    context_text, sources_text, state["original_question"]
+                ):
+                    parts.append(delta)
+                    emit({"type": "token", "delta": delta})
+                raw_response = "".join(parts)
+            except NotImplementedError:
+                raw_response = None
+        if raw_response is None:
+            raw_response = generator.generate_answer(
+                context_text, sources_text, state["original_question"]
+            )
+
         answer_text, footer = citation_engine.format_answer(raw_response, sources)
         display = f"{answer_text}\n\n{footer}" if footer else answer_text
 
+        detail = "answer"
+        if state.get("skip_judge"):
+            detail = "answer (judge skipped: top score cleared the threshold)"
         step = LoopTraceStep.new(
-            "answer", state["current_query"], "answer", started_at=started
+            "answer", state["current_query"], "answer", detail=detail, started_at=started
         )
+        _emit_step(step)
         trace: list[dict] = list(state["trace"]) + [trace_step_to_dict(step)]
 
         logger.debug("Agent answer node produced %d source(s)", len(sources))
@@ -387,6 +451,7 @@ def make_nodes(
         step = LoopTraceStep.new(
             "refuse", state["current_query"], "refuse", started_at=started
         )
+        _emit_step(step)
         trace: list[dict] = list(state["trace"]) + [trace_step_to_dict(step)]
         logger.debug("Agent refuse node: budget exhausted (attempts=%d)", state["attempts"])
         return {"answer": REFUSE_ANSWER, "refused": True, "trace": trace}
@@ -405,6 +470,15 @@ def make_nodes(
 # ---------------------------------------------------------------------------
 # Conditional routing after judge
 # ---------------------------------------------------------------------------
+
+
+def _route_after_retrieve(state: AgentLoopState) -> str:
+    """Route after retrieve: answer directly when the judge was skipped
+    (Phase 5 hardening — top retrieval score cleared ``AGENT_JUDGE_SKIP_MIN_
+    SCORE``), else run the judge.  With the skip disabled the retrieve node
+    never sets ``skip_judge``, so this edge is behaviour-identical to the
+    Phase 2 retrieve → judge edge."""
+    return "answer" if state.get("skip_judge") else "judge"
 
 
 def _route_after_judge(max_retries: int, tool=None):
@@ -470,6 +544,8 @@ def build_graph(
     language: str | None = None,
     max_retries: int | None = None,
     tool=None,
+    emit=None,
+    judge_skip_score: float = 0.0,
 ):
     """Build and compile the agentic loop over the injected components.
 
@@ -487,6 +563,10 @@ def build_graph(
         tool: Optional Phase 3 ``Tool`` (e.g. ``GitHubTool``). When ``None``
             the graph is exactly Phase 2: the judge is told tools are
             unavailable and no ``tool_call`` node exists.
+        emit: Optional live-view event callback (Phase 5, SPEC §7 — see
+            :func:`make_nodes`).  ``None`` → zero behaviour change.
+        judge_skip_score: Phase 5 hardening threshold (see
+            :func:`make_nodes`); ``0.0`` (default) → judge always runs.
 
     Returns:
         A compiled LangGraph ``StateGraph`` app. Invoking it with an
@@ -510,13 +590,19 @@ def build_graph(
         top_k=top_k,
         language=language,
         tool=tool,
+        emit=emit,
+        judge_skip_score=judge_skip_score,
     )
 
     builder = StateGraph(AgentLoopState)
     for name, node in nodes.items():
         builder.add_node(name, node)
     builder.add_edge(START, "retrieve")
-    builder.add_edge("retrieve", "judge")
+    builder.add_conditional_edges(
+        "retrieve",
+        _route_after_retrieve,
+        {"answer": "answer", "judge": "judge"},
+    )
     judge_paths: dict[str, str] = {
         "answer": "answer",
         "refuse": "refuse",

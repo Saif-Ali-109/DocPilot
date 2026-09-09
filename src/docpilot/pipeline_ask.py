@@ -19,7 +19,11 @@ from dataclasses import dataclass, field
 
 from docpilot import config
 from docpilot.citations.engine import StandardCitationEngine
-from docpilot.core.models import RetrieverResult, SourceRef
+from docpilot.core.models import (
+    RetrieverResult,
+    SourceRef,
+    derive_source_kind,
+)
 from docpilot.generation.prompts import SYSTEM_PROMPT, format_sources
 
 logger = logging.getLogger(__name__)
@@ -194,6 +198,7 @@ def ask(
                 ref=i + 1,
                 file=r.chunk.source_file,
                 heading=r.chunk.heading_path or None,
+                kind=derive_source_kind(r.chunk.source_file),
             )
             for i, r in enumerate(results)
         ]

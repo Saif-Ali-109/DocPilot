@@ -72,6 +72,24 @@ class Generator(ABC):
         """Send prompt to the LLM and return the generated answer string."""
         ...
 
+    def generate_stream(self, prompt: str):
+        """Yield text deltas for *prompt* (Phase 5 streaming, SPEC §7).
+
+        Default: not supported — raises ``NotImplementedError``.  Concrete
+        streaming implementations (``GroqGenerator``) override this; callers
+        that need streaming must fall back to :meth:`generate` when this
+        raises, keeping every non-streaming fake byte-identical.
+        """
+        raise NotImplementedError("generate_stream not supported")
+
+    def generate_answer_stream(self, context_text: str, sources_text: str, question: str):
+        """Streaming variant of the answered-prompt helper.
+
+        Builds the full prompt from ``SYSTEM_PROMPT`` and yields text deltas.
+        Default: raises ``NotImplementedError`` (see :meth:`generate_stream`).
+        """
+        raise NotImplementedError("generate_answer_stream not supported")
+
 
 class GroqGenerator(Generator):
     """Groq-backed answer generation with exponential backoff retry."""
@@ -85,6 +103,11 @@ class GroqGenerator(Generator):
         self._api_key = api_key or config.GROQ_API_KEY
         self._model = model or config.GROQ_MODEL
         self._max_retries = max_retries if max_retries is not None else config.GROQ_MAX_RETRIES
+        # Per-call token accounting (SPEC §7 hardening — follow-up §5.3):
+        # the most recent call's Groq `usage` dict, or None.  The API service
+        # surfaces this in the SSE `done` event; the eval harness integration
+        # stays a recorded follow-up.
+        self.last_usage: dict | None = None
 
         import groq as _groq
 
@@ -109,6 +132,19 @@ class GroqGenerator(Generator):
             question=question,
         )
         return self.generate(full_prompt)
+
+    def generate_answer_stream(self, context_text: str, sources_text: str, question: str):
+        """Streaming variant of :meth:`generate_answer`.
+
+        Builds the same ``SYSTEM_PROMPT`` prompt and yields text deltas from
+        :meth:`generate_stream` instead of returning one string.
+        """
+        full_prompt = SYSTEM_PROMPT.format(
+            context=context_text,
+            sources=sources_text,
+            question=question,
+        )
+        yield from self.generate_stream(full_prompt)
 
     # ------------------------------------------------------------------
     # Primitive interface method
@@ -143,6 +179,7 @@ class GroqGenerator(Generator):
                     temperature=0,
                 )
                 content = response.choices[0].message.content  # type: ignore[union-attr]
+                self._record_usage(getattr(response, "usage", None))
                 if not content or not content.strip():
                     raise _EmptyCompletion("empty completion")
                 return content.strip()
@@ -183,6 +220,103 @@ class GroqGenerator(Generator):
 
         # Exhausted all retries
         raise last_exc  # type: ignore[misc]
+
+    def generate_stream(self, prompt: str):
+        """Stream *prompt* from Groq, yielding text deltas (Phase 5, SPEC §7).
+
+        Same retry frame as :meth:`generate` (transient 429/5xx/connection
+        errors, the hosted-model tool-use glitch, empty completions), but only
+        *until the first delta is yielded* — a failure mid-stream cannot be
+        retried without corrupting the consumer's already-received text, so it
+        propagates.  On success records `usage` (streamed responses expose it
+        after full iteration) into ``self.last_usage``.
+        """
+        last_exc: Exception | None = None
+        effective_prompt = prompt
+        yielded_any = False
+
+        for attempt in range(self._max_retries):
+            try:
+                stream = self._client.chat.completions.create(
+                    model=self._model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": effective_prompt,
+                        },
+                    ],
+                    temperature=0,
+                    stream=True,
+                )
+                produced = False
+                for chunk in stream:
+                    choices = getattr(chunk, "choices", None) or []
+                    delta = (choices[0].delta.content or "") if choices else ""
+                    if delta:
+                        produced = True
+                        yielded_any = True
+                        yield delta
+                if not produced:
+                    # The request succeeded but the model gave no text —
+                    # treat like the empty-completion glitch (retry once with
+                    # the plain-prose guard).
+                    raise _EmptyCompletion("empty stream completion")
+                self._record_usage(getattr(stream, "usage", None))
+                return
+
+            except Exception as exc:
+                last_exc = exc
+                if yielded_any:
+                    # Started streaming and failed mid-stream: propagate —
+                    # the consumer already holds deltas, no retry is safe.
+                    raise
+                if effective_prompt is prompt and (
+                    self._is_tool_use_glitch(exc) or isinstance(exc, _EmptyCompletion)
+                ):
+                    effective_prompt = prompt + _TOOL_USE_GUARD_SUFFIX
+                    logger.warning(
+                        "Groq stream tool-use/empty glitch (attempt %d/%d): %s "
+                        "— retrying with plain-prose guard",
+                        attempt + 1,
+                        self._max_retries,
+                        exc,
+                    )
+                    continue
+                if self._is_transient(exc):
+                    server_wait = self._server_retry_after(exc)
+                    if server_wait is not None:
+                        wait = min(server_wait, _RETRY_AFTER_MAX_SECONDS)
+                    else:
+                        wait = self._backoff(attempt)
+                    logger.warning(
+                        "Groq stream failed (attempt %d/%d): %s — retrying in %.1fs",
+                        attempt + 1,
+                        self._max_retries,
+                        exc,
+                        wait,
+                    )
+                    time.sleep(wait)
+                else:
+                    # Non-transient: fail fast
+                    raise
+
+        raise last_exc  # type: ignore[misc]
+
+    def _record_usage(self, usage) -> None:
+        """Store the last call's Groq ``usage`` object (token accounting).
+
+        Attribute-defensive: SDK versions vary (``Usage`` dataclass vs dict).
+        ``None`` input or missing fields leave ``last_usage`` as-is.
+        """
+        if usage is None:
+            return
+        record: dict = {}
+        for name in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            value = getattr(usage, name, None)
+            if isinstance(value, int):
+                record[name] = value
+        if record:
+            self.last_usage = record
 
     def probe(self) -> ProbeResult:
         """One minimal completions call that reads the per-minute rate-limit

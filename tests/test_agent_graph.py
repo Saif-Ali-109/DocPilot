@@ -451,7 +451,12 @@ def test_needs_tool_routes_to_tool_call_and_cites_github_evidence() -> None:
     # The per-item source_label became a continuing SourceRef.
     github_sources = [s for s in final["sources"] if s["file"].startswith("github:")]
     assert github_sources == [
-        {"ref": 3, "file": "github:acme/widget#42", "heading": "OAuth token expires"}
+        {
+            "ref": 3,
+            "file": "github:acme/widget#42",
+            "heading": "OAuth token expires",
+            "kind": "live",
+        }
     ]
     assert final["tool_results"] and final["tool_results"][0]["ok"] is True
 

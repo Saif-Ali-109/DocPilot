@@ -390,7 +390,9 @@ def test_agentic_ask_with_tool_surfaces_github_evidence() -> None:
     # The generator saw the live evidence section and the footer lines up.
     assert gen.last_context is not None
     assert "LIVE GITHUB EVIDENCE:" in gen.last_context
-    assert "[3] github:acme/widget#42 → OAuth token expires" in gen.last_sources
+    # The prompt (format_sources) exposes the kind for the source-preference
+    # rule; the user-facing footer (CitationEngine) keeps the clean format.
+    assert "[3] github:acme/widget#42 (live) → OAuth token expires" in gen.last_sources
     assert "[3] github:acme/widget#42 → OAuth token expires" in agent_res.answer
 
 

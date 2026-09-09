@@ -192,6 +192,11 @@ class AgentLoopState(TypedDict, total=False):
     answer: str | None
     refused: bool
     direct: bool
+    # Phase 5 hardening (SPEC §7): set by the retrieve node when a
+    # configured judge-skip threshold is cleared — the judge LLM call is
+    # skipped and the router answers directly.  Default False; only ever
+    # True when AGENT_JUDGE_SKIP_MIN_SCORE > 0.
+    skip_judge: bool
 
 
 # ---------------------------------------------------------------------------

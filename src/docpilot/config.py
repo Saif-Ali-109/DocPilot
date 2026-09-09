@@ -50,14 +50,26 @@ RETRIEVAL_LANGUAGE: str = os.getenv("RETRIEVAL_LANGUAGE", "en")
 AGENT_MAX_RETRIES: int = int(os.getenv("AGENT_MAX_RETRIES", "2"))
 """Maximum judge/reformulate iterations before the agent refuses (SPEC §4.1)."""
 
-AGENT_LOOP_TOP_K: int = int(os.getenv("AGENT_LOOP_TOP_K", "8"))
+AGENT_LOOP_TOP_K: int = int(os.getenv("AGENT_LOOP_TOP_K", "5"))
 """Retrieval count used inside the agentic loop (the agentic retrieve calls)
 when the caller did not override ``top_k``.  The direct/fast path keeps
-``RETRIEVAL_TOP_K`` (5) — broader retrieval is reserved for the loop so both
-the loop retrieval and the judge see up to 8 chunks."""
+``RETRIEVAL_TOP_K`` (5).  Phase 5 hardening (SPEC §7 amendment 2026-09-09):
+the loop's context was broadened to 8 in Phase 2; Phase 5 shrinks it back to 5
+so the judge + answer prompts carry less context (latency lever), validated by
+the before/after §6.1 benchmark run."""
 
 AGENT_DEFAULT_STRATEGY: str = os.getenv("AGENT_DEFAULT_STRATEGY", "auto")
 """Default ``ask --strategy`` when the flag is not given (``auto|direct|agentic``)."""
+
+AGENT_JUDGE_SKIP_MIN_SCORE: float = float(os.getenv("AGENT_JUDGE_SKIP_MIN_SCORE", "0.0"))
+"""Fast-path judge skip (SPEC §7 amendment 2026-09-09).
+
+When ``0.0`` (default) the agentic loop always runs the judge LLM call — Phase
+2/4 behaviour unchanged.  When ``> 0``, the retrieve node marks
+``skip_judge`` when the top retrieval score clears the threshold and the graph
+routes straight to the answer node (one LLM call saved per question).  The
+threshold is deliberately disabled until the before/after §6.1 benchmark run
+justifies a value — the locked evaluation gate decides, not an ad hoc guess."""
 
 AGENT_JUDGE_MODEL: str = os.getenv("AGENT_JUDGE_MODEL", "")
 """Optional separate Groq model for the judge; empty string → ``GROQ_MODEL``."""
@@ -87,3 +99,8 @@ GITHUB_OWNER: str = os.getenv("GITHUB_OWNER", "")
 
 GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")
 """Default repository name for the GitHub tool (e.g. ``fastapi``)."""
+
+# --- Phase 5: API + UI (SPEC §7) ---
+DOCPILOT_DB_PATH: str = os.getenv("DOCPILOT_DB_PATH", "data/docpilot.sqlite3")
+"""SQLite file backing the API session/chat history (sessions + messages).
+Defaults under ``data/`` which is git-ignored — the DB is never committed."""

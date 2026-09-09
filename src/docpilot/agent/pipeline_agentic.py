@@ -68,6 +68,7 @@ def agentic_ask(
     language: str | None = None,
     max_retries: int | None = None,
     tool=None,
+    emit=None,
 ) -> AgentResult:
     """Answer *question* under the chosen strategy.
 
@@ -93,6 +94,12 @@ def agentic_ask(
             ``config.GITHUB_PAT`` is truthy, else ``None`` — with no PAT the
             graph is exactly Phase 2 (judge told tools are unavailable, no
             tool node exists).
+        emit: Optional live-view event callback (Phase 5, SPEC §7).  ``None``
+            (default) → byte-identical Phase 2–4 behaviour — the CLI and eval
+            never pass one.  When set, the gate ``step`` event is emitted
+            first, then the graph emits every node's ``step`` event as it
+            completes and streams answer deltas as ``token`` events (see
+            :func:`docpilot.agent.graph.make_nodes`).
 
     Returns:
         An :class:`AgentResult` whose ``answer`` is the final display string
@@ -137,6 +144,14 @@ def agentic_ask(
     )
     gate_started = time.perf_counter()
 
+    # The gate step is built once and shared by both paths; the emit hook (if
+    # any) sees it first so the UI gets the routing decision immediately.
+    gate_step = LoopTraceStep.new(
+        "gate", question, gate_decision, detail=gate_detail, started_at=gate_started
+    )
+    if emit is not None:
+        emit({"type": "step", "step": trace_step_to_dict(gate_step)})
+
     if not agentic:
         # ── fast path: identical to Phase 1 ask() ───────────────────────
         from docpilot.pipeline_ask import ask
@@ -148,9 +163,6 @@ def agentic_ask(
             citation_engine=citation_engine,
             top_k=fast_top_k,
             language=resolved_language,
-        )
-        gate_step = LoopTraceStep.new(
-            "gate", question, gate_decision, detail=gate_detail, started_at=gate_started
         )
         logger.debug("Gate decision: %s → direct fast path", gate_decision)
         return AgentResult(
@@ -181,9 +193,6 @@ def agentic_ask(
     if tool is None and config.GITHUB_PAT:
         tool = GitHubTool()
 
-    gate_step = LoopTraceStep.new(
-        "gate", question, gate_decision, detail=gate_detail, started_at=gate_started
-    )
     app = build_graph(
         retriever=retriever,
         judge=judge,
@@ -193,6 +202,8 @@ def agentic_ask(
         language=None if resolved_language == "any" else resolved_language,
         max_retries=max_retries,
         tool=tool,
+        emit=emit,
+        judge_skip_score=config.AGENT_JUDGE_SKIP_MIN_SCORE,
     )
     initial: AgentLoopState = {
         "question": question,
@@ -208,6 +219,7 @@ def agentic_ask(
         "answer": None,
         "refused": False,
         "direct": False,
+        "skip_judge": False,
     }
     try:
         final = app.invoke(initial)
@@ -263,7 +275,7 @@ class AgenticAgent(Agent):
 
         Recognised override keys: ``retriever``, ``generator``, ``judge``,
         ``citation_engine``, ``strategy``, ``top_k``, ``language``,
-        ``max_retries``, ``tool``.
+        ``max_retries``, ``tool``, ``emit``.
         """
         params = {
             "retriever": kwargs.get("retriever", self._retriever),
@@ -275,5 +287,6 @@ class AgenticAgent(Agent):
             "language": kwargs.get("language", self._language),
             "max_retries": kwargs.get("max_retries", self._max_retries),
             "tool": kwargs.get("tool", self._tool),
+            "emit": kwargs.get("emit", None),
         }
         return agentic_ask(question, **params)

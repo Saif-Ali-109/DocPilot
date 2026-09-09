@@ -19,6 +19,10 @@ RULES:
    reconstruct, extend, or embellish code examples from outside the context.
 8. Cite only the source that actually backs each claim; never cite a source
    merely because it is present in the context.
+9. When several offered sources cover the same claim, cite the most specific,
+   authoritative and stable file: prefer tutorial / advanced / reference
+   sections over index or overview pages (a file's kind is shown in
+   parentheses next to it in SOURCES).
 
 CONTEXT:
 {context}
@@ -32,9 +36,17 @@ QUESTION:
 
 
 def format_sources(sources: list[SourceRef]) -> str:
-    """Format source references into the numbered footer list."""
+    """Format source references into the numbered footer list.
+
+    Phase 5 (SPEC §7): when a :class:`SourceRef` carries a ``kind`` it is shown
+    in parentheses so the generator can apply the source-preference rule
+    (rule 9).  ``kind=None`` renders exactly the Phase 1–4 format — the
+    existing exact-match tests and CLI output are unchanged for unclassified
+    sources.
+    """
     lines: list[str] = []
     for s in sources:
+        kind_part = f" ({s.kind})" if s.kind else ""
         heading_part = f" → {s.heading}" if s.heading else ""
-        lines.append(f"[{s.ref}] {s.file}{heading_part}")
+        lines.append(f"[{s.ref}] {s.file}{kind_part}{heading_part}")
     return "\n".join(lines)
