@@ -66,6 +66,11 @@ from docpilot.tools import ToolRequest, ToolResult
 
 logger = logging.getLogger(__name__)
 
+# Excerpt length for the debug-panel "search" payload (kept petite for SSE;
+# identical constant in docpilot.api.service — the two event emitters must
+# stay shape-compatible for the UI).
+_EXCERPT_CHARS = 220
+
 # langgraph is imported lazily inside build_graph() — this module (and the
 # whole docpilot.agent package) stays importable without it, matching the
 # shared contract's design (agent/types.py declares no langgraph dependency).
@@ -208,6 +213,8 @@ def make_nodes(
         )
         step = LoopTraceStep.new("search", query, "retrieved", detail=detail, started_at=started)
         _emit_step(step)
+        if emit is not None:
+            emit(_search_payload(turn, query, results, started))
         trace: list[dict] = list(state["trace"]) + [trace_step_to_dict(step)]
 
         # Phase 5 judge skip: when a threshold is configured and the strongest
@@ -479,6 +486,32 @@ def _route_after_retrieve(state: AgentLoopState) -> str:
     never sets ``skip_judge``, so this edge is behaviour-identical to the
     Phase 2 retrieve → judge edge."""
     return "answer" if state.get("skip_judge") else "judge"
+
+
+def _search_payload(turn: int, query: str, results: list[RetrieverResult], started: float) -> dict:
+    """Debug-panel "search" event payload (Phase 5, SPEC §7).
+
+    Emitted on the agentic path (from the retrieve node) and on the direct
+    fast path (:mod:`docpilot.api.service`) — kept shape-identical so the UI
+    renders one debug panel for both.  Includes per-chunk file/heading/kind,
+    score and a bounded content excerpt.
+    """
+    return {
+        "type": "search",
+        "turn": turn,
+        "query": query,
+        "latency_ms": int((time.perf_counter() - started) * 1000),
+        "results": [
+            {
+                "file": r.chunk.source_file,
+                "heading": r.chunk.heading_path,
+                "kind": derive_source_kind(r.chunk.source_file),
+                "score": round(r.score, 4),
+                "excerpt": r.chunk.content[:_EXCERPT_CHARS],
+            }
+            for r in results
+        ],
+    }
 
 
 def _route_after_judge(max_retries: int, tool=None):

@@ -21,3 +21,6 @@ data/
 
 # --- Logs ---
 *.log
+
+# --- Chainlit generated i18n (config.toml is committed) ---
+.chainlit/translations/

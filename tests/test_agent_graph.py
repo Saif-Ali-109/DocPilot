@@ -193,6 +193,7 @@ def initial_state(question: str = GATE_QUERY, gate_decision: str = "agentic") ->
         "answer": None,
         "refused": False,
         "direct": False,
+        "skip_judge": False,
     }
 
 

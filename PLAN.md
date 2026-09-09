@@ -15,8 +15,7 @@
     optional code validation → extract reusable framework components.
     Do not skip ahead. Do not let later phases' ambitions leak into earlier
     phases' scope.
-- current_phase: 4 (Phase 5 NOT started — §6 guardrail: frontend polish never
-  delays or reshapes the RAG/agent core; Phase 4 owes no further work)
+- current_phase: 5 (IN PROGRESS — API + UI; SPEC §7 + amendment 2026-09-09; §6 task breakdown)
 - working_repo: https://github.com/Saif-Ali-109/DocPilot.git
 - working_dir: /home/ain/Desktop/RAG
 - spec_source_of_truth: >
@@ -730,13 +729,120 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
   the earlier judge-calibration + tool-necessity reports). Phase-4 milestone
   tagged `phase-4`.
 
-## 6. phase_5: "API + UI"
-- status: PLANNED
+## 6. phase_5: "API + UI" — IN PROGRESS (started 2026-09-09)
+
+- status: IN PROGRESS — implementation on the Phase 4-closed core; the §7
+  latency/citation hardening (SPEC amendment 2026-09-09) is Phase 5 scope
+  with a locked before/after benchmark gate (before = stamp 20260908_190539,
+  committed). Milestone tag `phase-5` only when §6.3 exit criteria + the
+  after-run are recorded.
 - summary: >
-    After core is working and evaluated. FastAPI backend (async introduced
-    here), streaming, citations + retrieved-context debug panel in UI,
-    SQLite session/chat history. Streamlit first; React/Next.js only if slack.
-- guardrail: Frontend polish never delays or distorts the RAG/agent core.
+    Async FastAPI backend (first async code in the project), SSE token
+    streaming, source citations surfaced in the UI, a retrieved-context debug
+    panel (chunks + scores + judge/tool trace steps + latency), SQLite
+    session/chat history, Chainlit UI. UI/API never reshape the RAG/agent core
+    (guardrail §7).
+- locked_decisions:
+  - **Async boundary.** Core stays synchronous (Groq client, psycopg, BGE).
+    FastAPI endpoints are async; every blocking core call runs in a worker
+    thread (`asyncio.to_thread` / `run_in_threadpool`). Progressive events are
+    bridged thread → SSE via an `asyncio.Queue`
+    (`loop.call_soon_threadsafe`), consumed by a `StreamingResponse` async
+    generator. Streaming is UX-only w.r.t. the §7 latency metric.
+  - **Streaming.** `Generator` gains `generate_stream(prompt) -> Iterator[str]`
+    and `generate_answer_stream(...)`; `GroqGenerator` implements them
+    (`stream=True`, same transient-retry frame, buffered — no delta is
+    yielded until the request is past the retry window). Direct/fast path
+    streams tokens through the API service; the agentic loop's answer node
+    streams via the new `emit` hook when a caller passes one (default
+    `None` → byte-identical Phase 2/4 behaviour, CLI + eval untouched).
+  - **Progress hook.** `agentic_ask(..., emit=None)` / `build_graph(..., emit=)`
+    take an optional event callback (dict events: `step` mirrors each
+    LoopTraceStep live; `token` streams answer deltas). Default `None` =
+    zero behaviour change; the CLI passes nothing.
+  - **SSE protocol** (type-tagged JSON `data:` lines): `gate` / `search`
+    (chunks + scores — debug panel) / `judge` / `tool_call` / `token` /
+    `answer` (text + footer + sources incl. `kind`) / `error` / `done`
+    (trace + latency + `usage`).
+  - **Sessions.** SQLite via stdlib `sqlite3` (no ORM). Tables `sessions` +
+    `messages` (question/answer/sources/trace/latency/refused timestamps).
+    HTTP API owns this record; Chainlit keeps its built-in persistence for UI
+    chat history (SPEC §7 amendment). DB file under `data/` (git-ignored).
+  - **Hardening** (SPEC §7 amendment, each behind the after-benchmark gate):
+    1. `AGENT_LOOP_TOP_K` default 8 → **5** (judge + answer prompt shrink);
+       `RETRIEVAL_TOP_K` stays 5.
+    2. Fast-path judge skip: `AGENT_JUDGE_SKIP_MIN_SCORE` (float, default 0.0
+       = **disabled** until the after-run justifies enabling). When > 0, the
+       retrieve node marks `skip_judge` when the top retrieval score clears
+       the threshold and routes straight to answer (judge LLM call saved).
+    3. Source-kind citations: `SourceRef.kind` (contract addition) derived
+       from `source_file` — `tutorial` / `advanced` / `how-to` / `reference`
+       / `index` / `other` (github tool refs → `live`); `format_sources`
+       shows it (prompt preference) + SYSTEM_PROMPT rule "prefer the most
+       specific/authoritative file when several cover the same claim".
+    4. Model knob: chat API accepts `model` per request (default `GROQ_MODEL`).
+    5. Token accounting: `GroqGenerator` records `last_usage`
+       (prompt/completion/total tokens) per call; surfaced in the `done`
+       event. Eval-report integration stays a §5.3 follow-up.
+    6. bd02 targeted look (both pipelines 0.0 citg): classic cited body.md /
+       query-params.md, agentic python-types.md — the gold path-params.md was
+       offered as [1] in both; source-kind preference is the fix lever.
+- guardrail: Frontend polish never delays or distorts the RAG/agent core;
+  the CLI and all Phase 1–4 behaviour stay byte-identical when no emit hook
+  is passed; Phase 6 (code gen) stays locked out.
+
+### 6.1 files & ownership
+
+- **AGENT U — API + UI** (this phase's implementer):
+  - `src/docpilot/api/__init__.py`, `api/app.py` (FastAPI), `api/service.py`
+    (event orchestration), `api/sse.py` (protocol/format helpers),
+    `api/store.py` (SQLite sessions/messages)
+  - `src/docpilot/ui/__init__.py`, `ui/chainlit_app.py`, `ui/chainlit.md`
+  - `tests/test_api_store.py`, `tests/test_api_chat.py`
+- **Coordinator — additive core touchpoints** (contract bumps, none breaking):
+  - `src/docpilot/core/models.py` — `SourceRef.kind` + `derive_source_kind()`
+  - `src/docpilot/generation/generator.py` — `generate_stream`,
+    `generate_answer_stream`, `last_usage`
+  - `src/docpilot/generation/prompts.py` — kind in `format_sources` + rule 9
+  - `src/docpilot/agent/types.py` — `AgentLoopState.skip_judge` field
+  - `src/docpilot/agent/graph.py` — emit hook (answer node), judge-skip
+    routing, `source_to_dict`/`dict_to_source` carry `kind`
+  - `src/docpilot/agent/pipeline_agentic.py` — `agentic_ask(..., emit=None)`,
+    pass judge-skip config through
+  - `src/docpilot/pipeline_ask.py` — sources built with `derive_source_kind`
+  - `src/docpilot/config.py` — `AGENT_LOOP_TOP_K` 5, `AGENT_JUDGE_SKIP_MIN_SCORE`,
+    `DOCPILOT_DB_PATH`
+  - `tests/test_generation_retry.py` (stream tests), `tests/test_agent_graph.py`
+    (skip + emit)
+
+### 6.2 deps
+
+- `fastapi>=0.115`, `uvicorn[standard]>=0.30`, `chainlit>=2.0` (+ uv.lock).
+  Dev/test: httpx already present (TestClient).
+
+### 6.3 exit_criteria (SPEC §7)
+
+- [ ] FastAPI async app runs (`uvicorn docpilot.api.app:app`); `/api/v1/health`
+- [ ] `POST /api/v1/chat` SSE-streams tokens + gate/search/judge/tool events;
+      final `answer` event carries citations (sources + footer) and `done`
+      carries trace + latency + usage
+- [ ] Debug-panel data per question: retrieved chunks + scores + trace steps
+- [ ] Sessions CRUD + messages in SQLite (`/api/v1/sessions*`)
+- [ ] Chainlit UI answers E2E with streaming + citation elements + steps
+- [ ] CLI + Phase 1–4 suite still green (byte-identical without emit hook)
+- [ ] Hardening after-run recorded (15 questions × both pipelines) with a
+      before/after table in the report note; judge-skip default enabled only
+      if the data supports it
+- [ ] README honest — Phase 5 scope only, no Phase 6 claims
+
+### 6.4 verification (live)
+
+- functional probe (`bash -ic`, exit 0 + per-minute headroom)
+- uvicorn + curl SSE smoke (direct + agentic + refusal rows)
+- Chainlit interactive QA (fast/agentic/refuse + debug panel)
+- after-benchmark run (classic quick; agentic checkpointed/resumed if TPD
+  walls) → merged stamp + before/after §6.1 table in the report note
+- milestone: cut `phase-5` when §6.3 all `[x]`
 
 ## 7. phase_6: "Code Generation / Validation"
 - status: PLANNED
