@@ -1,8 +1,8 @@
 {
   "pipeline": "classic",
-  "dataset_path": "/home/ain/Desktop/RAG/src/docpilot/eval/dataset/benchmark.json",
+  "dataset_path": "-",
   "generated_at": "2026-09-08T19:08:10",
-  "note": "Live classic (Groq, temp 0); groundedness audit on; docs recall@k over offered sources",
+  "note": "Live classic (Groq, temp 0); groundedness audit on; docs recall@k over offered sources; rescored 2026-09-09: gold v3 + \u00a73.9 refusal-text fallback; bd05 regenerated live under the empty-completion fix (original run returned an empty completion; new answer scored 1.0 facts, grounded False), bn03 counted as refused (verbatim \u00a73.9 sentence emitted); rescored 2026-09-09: gold v3 + \u00a73.9 refusal-text fallback; bd05 regenerated live under the empty-completion fix (original run returned an empty completion; new answer scored 1.0 facts, grounded False), bn03 counted as refused (verbatim \u00a73.9 sentence emitted)",
   "metrics": {
     "answer_correctness": 0.8,
     "retrieval_recall_at_k": 1.0,
