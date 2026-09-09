@@ -240,3 +240,8 @@ def _corpus_probe() -> dict:
         return {"reachable": True, "chunks": count}
     except Exception:  # noqa: BLE001 — health probe, never raises
         return {"reachable": False, "chunks": None}
+
+
+# Module-level app for ``uvicorn docpilot.api.app:app``.  Tests import
+# ``create_app`` directly with injected store/engine and never touch this.
+app = create_app()

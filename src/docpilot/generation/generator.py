@@ -247,9 +247,15 @@ class GroqGenerator(Generator):
                     ],
                     temperature=0,
                     stream=True,
+                    # groq<=1.7.0's typed surface rejects stream_options as a
+                    # direct kwarg but forwards extra_body into the request —
+                    # the API then tags the final chunk with usage.
+                    extra_body={"stream_options": {"include_usage": True}},
                 )
                 produced = False
+                last_chunk = None
                 for chunk in stream:
+                    last_chunk = chunk
                     choices = getattr(chunk, "choices", None) or []
                     delta = (choices[0].delta.content or "") if choices else ""
                     if delta:
@@ -261,7 +267,13 @@ class GroqGenerator(Generator):
                     # treat like the empty-completion glitch (retry once with
                     # the plain-prose guard).
                     raise _EmptyCompletion("empty stream completion")
-                self._record_usage(getattr(stream, "usage", None))
+                # Streamed usage arrives on the final chunk when
+                # stream_options=include_usage is set (OpenAI-compatible SDKs);
+                # some SDK versions only expose it on the stream object.
+                self._record_usage(
+                    getattr(stream, "usage", None)
+                    or (getattr(last_chunk, "usage", None) if last_chunk is not None else None)
+                )
                 return
 
             except Exception as exc:

@@ -250,6 +250,140 @@ class TestGenerateRetry:
 
 
 # ---------------------------------------------------------------------------
+# generate_answer_stream — streaming + usage accounting (Phase 5, SPEC §7)
+# ---------------------------------------------------------------------------
+
+
+class _StreamChunk:
+    """One streamed chunk; mimics the OpenAI/Groq chunk shape."""
+
+    def __init__(self, content: str = "", usage=None):
+        self.choices = (
+            [types.SimpleNamespace(delta=types.SimpleNamespace(content=content))]
+            if content
+            else []
+        )
+        # `openai.Chunk.usage`-ish; last (usage-only) chunk carries tokens.
+        if usage is not None:
+            self.usage = types.SimpleNamespace(**usage)
+
+
+class _StreamWithUsage:
+    """Iterable stream that exposes ``.usage`` like some SDK versions."""
+
+    def __init__(self, chunks, usage_kwargs):
+        self._chunks = list(chunks)
+        self.usage = types.SimpleNamespace(**usage_kwargs)
+
+    def __iter__(self):
+        return iter(self._chunks)
+
+
+class _StreamingFakeCompletions:
+    def __init__(self, stream, *usage_kwargs):
+        # stream: iterable of chunks; usage_kwargs: a usage dict attached to
+        # the stream object when the SDK exposes it there instead of on the
+        # final usage-only chunk.
+        self._stream = stream
+        self._usage_kwargs = usage_kwargs
+        self.kwargs: dict | None = None
+
+    def create(self, **kwargs):
+        self.kwargs = kwargs
+        if self._usage_kwargs:
+            return _StreamWithUsage(self._stream, self._usage_kwargs[0])
+        return self._stream
+
+
+class _StreamingFakeClient:
+    def __init__(self, stream, *usage_kwargs):
+        self.chat = types.SimpleNamespace(
+            completions=_StreamingFakeCompletions(stream, *usage_kwargs)
+        )
+
+
+class TestGenerateAnswerStreamUsage:
+    def test_stream_requests_usage_via_extra_body(self):
+        gen = _gen([])
+        gen._client = _StreamingFakeClient([_StreamChunk("hi")])  # noqa: SLF001
+        assert "".join(gen.generate_answer_stream("ctx", "[1] src.md", "q")) == "hi"
+        assert gen._client.chat.completions.kwargs.get("extra_body") == {
+            "stream_options": {"include_usage": True}
+        }
+
+    def test_usage_decoded_from_final_chunk(self):
+        chunks = [
+            _StreamChunk("A streamed "),
+            _StreamChunk("answer [1]"),
+            _StreamChunk(usage={"prompt_tokens": 11, "completion_tokens": 5, "total_tokens": 16}),
+        ]
+        gen = _gen([])
+        gen._client = _StreamingFakeClient(chunks)  # noqa: SLF001
+        streamed = "".join(gen.generate_answer_stream("ctx", "[1] src.md", "q"))
+        assert streamed == "A streamed answer [1]"
+        assert gen.last_usage == {
+            "prompt_tokens": 11,
+            "completion_tokens": 5,
+            "total_tokens": 16,
+        }
+
+    def test_usage_falls_back_to_stream_object(self):
+        chunks = [_StreamChunk("hi "), _StreamChunk("there")]
+        gen = _gen([])
+        gen._client = _StreamingFakeClient(  # noqa: SLF001
+            chunks,
+            {"prompt_tokens": 3, "completion_tokens": 7, "total_tokens": 10},
+        )
+        assert "".join(gen.generate_answer_stream("ctx", "[1] src.md", "q")) == "hi there"
+        assert gen.last_usage["total_tokens"] == 10
+
+    def test_no_usage_info_leaves_last_usage_none(self):
+        gen = _gen([])
+        gen._client = _StreamingFakeClient([_StreamChunk("hi")])  # noqa: SLF001
+        assert "".join(gen.generate_answer_stream("ctx", "[1] src.md", "q")) == "hi"
+        assert gen.last_usage is None
+
+    def test_empty_stream_completion_retries_with_guard(self):
+        """Whitespace/empty streams are the empty-completion glitch: retry once
+        with the plain-prose guard before failing through."""
+        from docpilot.generation.generator import _TOOL_USE_GUARD_SUFFIX
+
+        gen = _gen([])
+        client = _FakeStreamClient(
+            [["", "", ""], ["real streamed ", "answer"]]
+        )
+        gen._client = client  # noqa: SLF001
+        out = "".join(gen.generate_answer_stream("ctx", "[1] src.md", "q"))
+        assert out == "real streamed answer"
+        first = client.completions.seen_contents[0]
+        # the guard suffix is appended to the assembled system prompt
+        assert client.completions.seen_contents == [first, first + _TOOL_USE_GUARD_SUFFIX]
+
+
+class _FakeStreamChunk:
+    def __init__(self, content):
+        self.choices = [types.SimpleNamespace(delta=types.SimpleNamespace(content=content))]
+
+
+class _FakeStreamCompletions:
+    """Stream responses as list-of-lists (each inner list = one attempt)."""
+
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.seen_contents = []
+
+    def create(self, **kwargs):
+        self.seen_contents.append(kwargs["messages"][0]["content"])
+        return [_FakeStreamChunk(tok) for tok in self._responses.pop(0)]
+
+
+class _FakeStreamClient:
+    def __init__(self, responses):
+        self.completions = _FakeStreamCompletions(responses)
+        self.chat = types.SimpleNamespace(completions=self.completions)
+
+
+# ---------------------------------------------------------------------------
 # probe() — reads x-ratelimit-* headers so a tiny call can't mask a
 # nearly-exhausted daily bucket (SPEC §6.5)
 # ---------------------------------------------------------------------------
