@@ -17,6 +17,11 @@ dependencies = [
     "requests>=2.32.0",
     "gitpython>=3.1.0",
     "langgraph>=1.2.11",
+    # Phase 5 — API + UI (SPEC §7): async FastAPI backend, SSE streaming,
+    # SQLite session/chat history, Chainlit UI (built on FastAPI/Starlette).
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "chainlit>=2.0.0",
 ]
 
 [project.optional-dependencies]
