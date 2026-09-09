@@ -23,11 +23,12 @@
       "category": "docs-answerable",
       "question": "How do I declare the type of a path parameter in FastAPI?",
       "gold_key_facts": [
-        "type annotation"
+        "type",
+        "path parameter"
       ],
       "gold_sources": ["en/docs/tutorial/path-params.md"],
       "gold_refusal": false,
-      "note": "Reuses tool_necessity td02."
+      "note": "Reuses tool_necessity td02. v3: 'type annotation' was corpus-strict — a correct answer may say 'type hint'; invariant is type + path parameter."
     },
     {
       "id": "bd03",
@@ -69,12 +70,11 @@
       "category": "docs-answerable",
       "question": "Does declaring a default value on a query parameter make it optional or required?",
       "gold_key_facts": [
-        "optional",
-        "not required"
+        "optional"
       ],
       "gold_sources": ["en/docs/tutorial/query-params.md"],
       "gold_refusal": false,
-      "note": "Corpus-derived fragments (optional / not required) — paraphrase-tolerant."
+      "note": "v3: 'not required' dropped — redundant with 'optional' and corpus-strict against a fully correct answer that only says optional."
     },
     {
       "id": "bd07",

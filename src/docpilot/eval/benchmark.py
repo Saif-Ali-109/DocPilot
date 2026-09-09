@@ -35,7 +35,7 @@ import logging
 import re
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from docpilot.agent.prompts import REFUSE_ANSWER
@@ -291,6 +291,10 @@ def run_pipeline(
     rows: list[BenchmarkRow] = []
     for q in benchmark:
         out = run(q.question)
+        # Refusal contract is the verbatim §3.9 sentence: a pipeline that
+        # emits it has refused even if its flag wasn't set (e.g. the generator
+        # self-refused on the answer path). Effective flag = flag OR text.
+        out = replace(out, refused=out.refused or _refused(out.answer))
         body = answer_body(out.answer)
         markers = body_markers(body)
 

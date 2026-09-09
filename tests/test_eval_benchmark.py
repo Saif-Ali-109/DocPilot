@@ -277,6 +277,28 @@ class TestScoring:
         assert report.rows[0].answer_correct == 0.0
         assert report.metrics.refusal_accuracy == 0.0
 
+    def test_neither_refused_via_text_fallback_despite_flag(self):
+        """The §3.9 refusal sentence in the answer means the pipeline refused
+        even when its refused flag wasn't set (2026-09-09 live bn03: the
+        generator self-refused on the answer path after a tool call)."""
+        from docpilot.agent.prompts import REFUSE_ANSWER
+
+        q = [_question("n1", "neither", facts=(), sources=(), gold_refusal=True)]
+        report = run_pipeline(
+            q, "agentic", _scripted(answer=REFUSE_ANSWER, refused=False)
+        )
+        r = report.rows[0]
+        assert r.refused is True
+        assert r.answer_correct == 1.0
+        assert r.grounded is None  # refusals carry no factual claims — no audit
+        assert report.metrics.refusal_accuracy == 1.0
+
+    def test_neither_refused_flag_false_and_text_absent_is_wrong(self):
+        q = [_question("n1", "neither", facts=(), sources=(), gold_refusal=True)]
+        report = run_pipeline(q, "classic", _scripted(answer="no idea", refused=False))
+        assert report.rows[0].answer_correct == 0.0
+        assert report.metrics.refusal_accuracy == 0.0
+
     def test_retrieval_calls_counted_from_trace(self):
         q = [_question("d1")]
         run = _scripted(
