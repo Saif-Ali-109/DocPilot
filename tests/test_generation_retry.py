@@ -197,6 +197,34 @@ class TestGenerateRetry:
             "hi" + _TOOL_USE_GUARD_SUFFIX,
         ]
 
+    def test_empty_completion_retries_once_with_guard(self):
+        """A whitespace-only completion (2026-09-09 live failure on bd05) is
+        retried once with the plain-prose guard instead of returning ''."""
+        from docpilot.generation.generator import _TOOL_USE_GUARD_SUFFIX
+
+        client = _FakeClient(["  \n", "real answer"])
+        gen = _gen([], max_retries=3)
+        gen._client = client  # noqa: SLF001 - test seam
+        assert gen.generate("hi") == "real answer"
+        assert client.chat.completions.seen_contents == [
+            "hi",
+            "hi" + _TOOL_USE_GUARD_SUFFIX,
+        ]
+
+    def test_empty_completion_persistent_fails_fast(self):
+        from docpilot.generation.generator import _TOOL_USE_GUARD_SUFFIX
+
+        client = _FakeClient(["", "", ""])
+        gen = _gen([], max_retries=3)
+        gen._client = client  # noqa: SLF001 - test seam
+        with pytest.raises(Exception, match="empty completion"):
+            gen.generate("hi")
+        # one plain attempt + up to the remaining attempts guarded, then raise
+        assert client.chat.completions.seen_contents[:2] == [
+            "hi",
+            "hi" + _TOOL_USE_GUARD_SUFFIX,
+        ]
+
     def test_tool_use_glitch_exhausts_into_raise(self):
         """Guard is applied exactly once; a persistent glitch fails fast."""
         from docpilot.generation.generator import _TOOL_USE_GUARD_SUFFIX

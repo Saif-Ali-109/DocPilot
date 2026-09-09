@@ -22,11 +22,16 @@ _RETRY_AFTER_MAX_SECONDS = 10.0
 
 # Appended to a prompt when the hosted model emits a tool call despite no
 # tools being declared (Groq 400 code tool_use_failed — "Tool choice is none,
-# but model called a tool"). A model-side glitch, retried once with this guard.
+# but model called a tool") or returns an empty/whitespace-only completion.
+# Model-side anomalies, retried once with this guard.
 _TOOL_USE_GUARD_SUFFIX = (
     "\n\nRespond in plain prose only. Do not call any tools, do not emit "
     "function-call JSON, and do not reference file paths or line ranges."
 )
+
+
+class _EmptyCompletion(Exception):
+    """Raised internally when the model returns an empty/whitespace completion."""
 
 
 def _int_header(headers, name: str) -> int | None:
@@ -137,14 +142,19 @@ class GroqGenerator(Generator):
                     ],
                     temperature=0,
                 )
-                return response.choices[0].message.content.strip()  # type: ignore[union-attr]
+                content = response.choices[0].message.content  # type: ignore[union-attr]
+                if not content or not content.strip():
+                    raise _EmptyCompletion("empty completion")
+                return content.strip()
 
             except Exception as exc:
                 last_exc = exc
-                if self._is_tool_use_glitch(exc) and effective_prompt is prompt:
+                if effective_prompt is prompt and (
+                    self._is_tool_use_glitch(exc) or isinstance(exc, _EmptyCompletion)
+                ):
                     effective_prompt = prompt + _TOOL_USE_GUARD_SUFFIX
                     logger.warning(
-                        "Groq tool-use glitch (attempt %d/%d): %s — retrying "
+                        "Groq tool-use/empty glitch (attempt %d/%d): %s — retrying "
                         "with plain-prose guard",
                         attempt + 1,
                         self._max_retries,
