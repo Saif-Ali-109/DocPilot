@@ -718,6 +718,36 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
     parse-fallbacks (agentic half), 0.0 calibration parse-failure rate (24
     triples, both prompts), no generator under-refusal observed (bn03
     self-refused with the verbatim §3.9 sentence).
+- **Phase 5 hardening AFTER-run (started 2026-09-09, stamp `20260909_162036`):**
+  the §6.1 locked gate against before = `20260908_190539`. Same 15 questions,
+  both pipelines, post-hardening core (streaming, source-kind + SYSTEM_PROMPT
+  rule 9, AGENT_LOOP_TOP_K 8→5, judge-skip default disabled).
+  - classic complete: stamp `20260909_162036` classic sidecar recorded.
+  - agentic half: walled by the on_demand TPD bucket on 2026-09-09 evening
+    (Used 198698–199964/200000 — probe + earlier attempts burned the window;
+    every agentic question needs ~2.6k+ tokens). Multi-window resume
+    (Phase-4 playbook): rerun with `--pipeline agentic --resume
+    20260909_162036` in a later window, then `--merge`. Table below fills in
+    when the agentic half lands.
+  - **before/after (classic only so far; agentic PENDING):**
+
+    | metric | before classic | after classic | before agentic | after agentic |
+    | --- | --- | --- | --- | --- |
+    | answer_correctness | 0.8000 | 0.8000 | 0.9667 | pending |
+    | retrieval recall@k (docs) | 1.0000 | 1.0000 | 1.0000 | pending |
+    | citation validity | 1.0000 | 1.0000 | 1.0000 | pending |
+    | citation gold (docs) | 0.5312 | **0.5625** | 0.5833 | pending |
+    | refusal accuracy | 1.0000 | 1.0000 | 1.0000 | pending |
+    | groundedness | 0.7000 | 0.7000 | 0.5000 | pending |
+    | avg latency | 9046 ms | 10924 ms | 31862 ms | pending |
+    | avg retrieval calls | 1.0000 | 1.0000 | 1.1333 | pending |
+    | avg tool calls | 0.0000 | 0.0000 | 0.2667 | pending |
+
+  - reading so far (classic): answer correctness/latency/gold are statistically
+    unchanged by the hardening on the fast path; citation-gold nudged up
+    (+0.03) but bd02 still misses on classic (single-run evidence — the
+    source-kind lever did not flip that specific citation). Judge-skip stays
+    **disabled** (0.0) until the agentic half lands.
 - follow-up (open, Phase 5 scope): token accounting (record per-call `usage`);
   latency/citation-gold hardening per SPEC §7 amendment 2026-09-09 — top_k
   8→4–5, fast-path judge skip for clearly-doc questions, source-kind citation

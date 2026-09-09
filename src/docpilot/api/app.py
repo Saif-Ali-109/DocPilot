@@ -180,13 +180,10 @@ async def _chat_stream(body: ChatRequest, *, store: SessionStore, engine: Callab
             loop.call_soon_threadsafe(queue.put_nowait, _SENTINEL)
 
     task = asyncio.create_task(worker())
-    seen_answer = False
     while True:
         item = await queue.get()
         if item is _SENTINEL:
             break
-        if item.get("type") == "answer":
-            seen_answer = True
         yield sse_line(item)
         if item.get("type") == "error":
             # worker is finished after this; drain the sentinel
