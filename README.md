@@ -4,7 +4,7 @@ An evidence-driven agentic RAG system for technical documentation.
 
 DocPilot ingests Markdown/MDX documentation (code blocks, nested headings, cross-references) and answers questions using retrieved evidence. Rather than naive retrieve-and-answer, it evaluates whether its evidence is sufficient, retries searches when it isn't, and says **"I don't know"** rather than hallucinating. Every retrieval and tool decision is loggable and inspectable.
 
-> **Status:** Phases 1–4 complete (Classic RAG → Agentic Retrieval → GitHub tooling → Evaluation, benchmarked `phase-4`). Phase 5 (API + UI) **in progress** — async FastAPI backend, SSE streaming, citations + retrieved-context debug panel, SQLite session history, Chainlit UI. See [PLAN.md](PLAN.md) for the build plan and [SPEC.md](SPEC.md) for the authoritative specification.
+> **Status:** Phases 1–5 complete (Classic RAG → Agentic Retrieval → GitHub tooling → Evaluation → API/UI). Phase 5 (API + UI) is benchmarked and tag-closed: async FastAPI backend, SSE streaming, citations + retrieved-context debug panel, SQLite session history, Chainlit UI, hardening after-run recorded (gate stamp `20260910_201739`, both pipelines on the deduped corpus). See [PLAN.md](PLAN.md) for the build plan and [SPEC.md](SPEC.md) for the authoritative specification.
 
 ## Current scope
 
@@ -14,7 +14,7 @@ DocPilot ingests Markdown/MDX documentation (code blocks, nested headings, cross
 - **GitHub tool (Phase 3):** judge-gated — the loop reaches GitHub (live issues, repo commits) via a plain REST `Tool` only when static docs are demonstrably insufficient; each call is traced and cited (`github:#issue` / `@commit`)
 - **Generation:** Groq, temperature 0, retry/backoff; token usage recorded per answer
 - **Output:** cited answers with inline `[1]` source markers + footer (sources tagged by kind — tutorial/advanced/reference/… — to steer the LLM to the most specific file); per-step agent trace in `--debug` / `--json`
-- **API + UI (Phase 5, in progress):** async FastAPI backend with SSE token streaming; `POST /api/v1/chat` returns a `gate → search → token… → answer → done` event stream; SQLite session/chat history (`/api/v1/sessions`); Chainlit UI renders the live trace, a retrieval debug panel (chunks + scores) and cited sources
+- **API + UI (Phase 5, complete):** async FastAPI backend with SSE token streaming; `POST /api/v1/chat` returns a `gate → search → token… → answer → done` event stream; SQLite session/chat history (`/api/v1/sessions`); Chainlit UI renders the live trace, a retrieval debug panel (chunks + scores) and cited sources
 
 ## Setup
 
@@ -65,7 +65,7 @@ Broken down development is documented in PLAN.md §6.
 | 2. Agentic retrieval | ✅ Complete |
 | 3. GitHub tooling (plain REST, no MCP) | ✅ Complete (benchmarked `phase-3`) |
 | 4. Evaluation | ✅ Complete (benchmarked `phase-4`; 15-question suite, classic-vs-agentic comparison) |
-| 5. API + UI | 🚧 In progress (backend + Chainlit UI built; milestone gate = §6.1 before/after benchmark) |
+| 5. API + UI | ✅ Complete (backend + Chainlit UI; hardening after-run recorded, gate stamp `20260910_201739`, tagged `phase-5`) |
 | 6. Code generation/validation | Planned (not implemented — do not treat as available) |
 | Framework extraction | Post-Phase 6 |
 

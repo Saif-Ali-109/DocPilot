@@ -718,36 +718,60 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
     parse-fallbacks (agentic half), 0.0 calibration parse-failure rate (24
     triples, both prompts), no generator under-refusal observed (bn03
     self-refused with the verbatim §3.9 sentence).
-- **Phase 5 hardening AFTER-run (started 2026-09-09, stamp `20260909_162036`):**
-  the §6.1 locked gate against before = `20260908_190539`. Same 15 questions,
-  both pipelines, post-hardening core (streaming, source-kind + SYSTEM_PROMPT
-  rule 9, AGENT_LOOP_TOP_K 8→5, judge-skip default disabled).
-  - classic complete: stamp `20260909_162036` classic sidecar recorded.
-  - agentic half: walled by the on_demand TPD bucket on 2026-09-09 evening
-    (Used 198698–199940/200000 — probe + earlier attempts kept occupying the
-    window; every agentic question needs ~2.6k+ tokens, headroom stayed ≤
-    ~100). Multi-window resume (Phase-4 playbook): rerun with
-    `--pipeline agentic --resume 20260909_162036` in a later window, then
-    `--merge`. Table below fills in when the agentic half lands.
-  - **before/after (classic only so far; agentic PENDING):**
+- **Phase 5 hardening AFTER-run:** the §6.1 locked gate against before =
+  `20260908_190539`. Same 15 questions, both pipelines, post-hardening core
+  (streaming, source-kind + SYSTEM_PROMPT rule 9, AGENT_LOOP_TOP_K 8→5,
+  judge-skip default disabled).
+  - First attempt (2026-09-09, stamp `20260909_162036`): classic sidecar ran
+    on the then-live dirty corpus (16,535 rows, 1,216 twin rows); the agentic
+    half was TPD-walled (Used 198698–199940/200000) and the corpus was later
+    deduped (16,535→15,319) *between* the halves → asymmetric, kept as
+    historical evidence only, NOT used for the gate table.
+  - **Fresh symmetric after-run (2026-09-10, stamp `20260910_201739`):** both
+    halves re-run on the deduped corpus + hardened search (top_k×2 dedupe
+    window) — apples-to-apples classic-vs-agentic. Classic 20:20, agentic
+    resumed under the same stamp 20:27 (exit 0); combined report + comparison
+    auto-written (`benchmark_20260910_201739.json`). This stamp is the gate
+    source. **Before-table cit-gold columns corrected below** (they were
+    transposed in the original draft: before classic 0.5833 / before agentic
+    0.5312).
+  - **before/after (stamp 20260910_201739):**
 
     | metric | before classic | after classic | before agentic | after agentic |
     | --- | --- | --- | --- | --- |
-    | answer_correctness | 0.8000 | 0.8000 | 0.9667 | pending |
-    | retrieval recall@k (docs) | 1.0000 | 1.0000 | 1.0000 | pending |
-    | citation validity | 1.0000 | 1.0000 | 1.0000 | pending |
-    | citation gold (docs) | 0.5312 | **0.5625** | 0.5833 | pending |
-    | refusal accuracy | 1.0000 | 1.0000 | 1.0000 | pending |
-    | groundedness | 0.7000 | 0.7000 | 0.5000 | pending |
-    | avg latency | 9046 ms | 10924 ms | 31862 ms | pending |
-    | avg retrieval calls | 1.0000 | 1.0000 | 1.1333 | pending |
-    | avg tool calls | 0.0000 | 0.0000 | 0.2667 | pending |
+    | answer_correctness | 0.8000 | 0.7333 | 0.9667 | 0.9333 |
+    | retrieval recall@k (docs) | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+    | citation validity | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+    | citation gold (docs) | 0.5833 | **0.6333** | 0.5312 | **0.6429** |
+    | refusal accuracy | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+    | groundedness | 0.7000 | **0.7778** | 0.5000 | **0.7273** |
+    | avg latency | 9046 ms | 9797 ms | 31862 ms | **22439 ms** |
+    | avg retrieval calls | 1.0000 | 1.0000 | 1.1333 | 1.1333 |
+    | avg tool calls | 0.0000 | 0.0000 | 0.2667 | 0.3333 |
 
-  - reading so far (classic): answer correctness/latency/gold are statistically
-    unchanged by the hardening on the fast path; citation-gold nudged up
-    (+0.03) but bd02 still misses on classic (single-run evidence — the
-    source-kind lever did not flip that specific citation). Judge-skip stays
-    **disabled** (0.0) until the agentic half lands.
+  - reading (fresh symmetric run):
+    - classic correctness 0.8→0.7333: single-row delta bd02 (1.0→0.5, now
+      ungrounded) — the documented source-kind miss (§6.1 #6): path-params.md
+      retrieved rank-1 but the generator cited body/query-params markers; the
+      before-run was luckier. bl02 improved (hallucinated "PR #13871" →
+      verbatim §3.9 honest refusal), bd08 grounded False→True, bl01/bl03
+      honest refusals unchanged.
+    - agentic correctness 0.9667→0.9333: single-row delta bl03 (live-state) —
+      tool fired with issue evidence (`fastapi#10370`) but the generator
+      self-refused (verbatim §3.9) instead of answering "3 open issues"; the
+      before-run answered that from a single issue citation. Safe-direction
+      single-run noise. Groundedness improved 0.50→0.7273 (bd05, bd08, bl04
+      flip to grounded), latency 31.9s→22.4s, cit-gold 0.5312→0.6429.
+    - comparison (9 decided metrics): agentic wins answer_correctness (+0.2
+      over classic after) and citation-gold; classic wins groundedness
+      (+0.05), latency (2.3× faster), retrieval/tool counts; ties on recall /
+      citation validity / refusal accuracy. The agentic correctness premium
+      over classic holds on the clean corpus.
+    - **judge-skip: stays DISABLED (`AGENT_JUDGE_SKIP_MIN_SCORE` = 0.0)** —
+      the judge's tool-necessity + sufficiency decisions drove every
+      live-state row (bl01/bl02/bl04 tools, bn03 engagement, bl03 honest
+      refusal); nothing in the after-run data supports bypassing the fast-path
+      judge call.
 - follow-up (open, Phase 5 scope): token accounting (record per-call `usage`);
   latency/citation-gold hardening per SPEC §7 amendment 2026-09-09 — top_k
   8→4–5, fast-path judge skip for clearly-doc questions, source-kind citation
@@ -759,13 +783,14 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
   the earlier judge-calibration + tool-necessity reports). Phase-4 milestone
   tagged `phase-4`.
 
-## 6. phase_5: "API + UI" — IN PROGRESS (started 2026-09-09)
+## 6. phase_5: "API + UI" — COMPLETE (started 2026-09-09, gate closed 2026-09-10)
 
-- status: IN PROGRESS — implementation on the Phase 4-closed core; the §7
-  latency/citation hardening (SPEC amendment 2026-09-09) is Phase 5 scope
-  with a locked before/after benchmark gate (before = stamp 20260908_190539,
-  committed). Milestone tag `phase-5` only when §6.3 exit criteria + the
-  after-run are recorded.
+- status: COMPLETE — implementation on the Phase 4-closed core; the §7
+  latency/citation hardening (SPEC amendment 2026-09-09) shipped with a locked
+  before/after benchmark gate (before = stamp 20260908_190539, committed).
+  Gate closed on the fresh symmetric after-run (stamp 20260910_201739, both
+  halves on the deduped corpus); all §6.3 exit criteria `[x]`; milestone
+  tag `phase-5`.
 - summary: >
     Async FastAPI backend (first async code in the project), SSE token
     streaming, source citations surfaced in the UI, a retrieved-context debug
@@ -852,27 +877,32 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
 
 ### 6.3 exit_criteria (SPEC §7)
 
-- [ ] FastAPI async app runs (`uvicorn docpilot.api.app:app`); `/api/v1/health`
-- [ ] `POST /api/v1/chat` SSE-streams tokens + gate/search/judge/tool events;
+- [x] FastAPI async app runs (`uvicorn docpilot.api.app:app`); `/api/v1/health`
+- [x] `POST /api/v1/chat` SSE-streams tokens + gate/search/judge/tool events;
       final `answer` event carries citations (sources + footer) and `done`
       carries trace + latency + usage
-- [ ] Debug-panel data per question: retrieved chunks + scores + trace steps
-- [ ] Sessions CRUD + messages in SQLite (`/api/v1/sessions*`)
-- [ ] Chainlit UI answers E2E with streaming + citation elements + steps
-- [ ] CLI + Phase 1–4 suite still green (byte-identical without emit hook)
-- [ ] Hardening after-run recorded (15 questions × both pipelines) with a
+- [x] Debug-panel data per question: retrieved chunks + scores + trace steps
+- [x] Sessions CRUD + messages in SQLite (`/api/v1/sessions*`)
+- [x] Chainlit UI answers E2E with streaming + citation elements + steps
+- [x] CLI + Phase 1–4 suite still green (byte-identical without emit hook)
+- [x] Hardening after-run recorded (15 questions × both pipelines) with a
       before/after table in the report note; judge-skip default enabled only
-      if the data supports it
-- [ ] README honest — Phase 5 scope only, no Phase 6 claims
+      if the data supports it — verdict: **stays disabled (0.0)**; symmetric
+      gate stamp `20260910_201739`, table in §6, report committed
+- [x] README honest — Phase 5 scope only, no Phase 6 claims
 
 ### 6.4 verification (live)
 
-- functional probe (`bash -ic`, exit 0 + per-minute headroom)
-- uvicorn + curl SSE smoke (direct + agentic + refusal rows)
-- Chainlit interactive QA (fast/agentic/refuse + debug panel)
-- after-benchmark run (classic quick; agentic checkpointed/resumed if TPD
-  walls) → merged stamp + before/after §6.1 table in the report note
-- milestone: cut `phase-5` when §6.3 all `[x]`
+- [x] functional probe (`bash -ic`, exit 0 + per-minute headroom) — 2026-09-10
+- [x] uvicorn + curl SSE smoke (direct + agentic + refusal rows) — direct +
+      refusal streamed 2026-09-10; refusal `answer` event carries the verbatim
+      §3.9 sentence and `refused: true` (direct-path flag fixed 2026-09-10)
+- [x] Chainlit interactive QA (fast/agentic/refuse + debug panel) — user
+      validated in-browser 2026-09-09 (chat + debug panel screenshots)
+- [x] after-benchmark run (classic quick; agentic checkpointed/resumed if TPD
+      walls) → merged stamp `20260910_201739` + before/after §6.1 table in the
+      report note (fresh symmetric run on the deduped corpus)
+- [x] milestone: cut `phase-5` when §6.3 all `[x]`
 
 ## 7. phase_6: "Code Generation / Validation"
 - status: PLANNED
