@@ -11,6 +11,7 @@ import logging
 
 from docpilot.agent.judge import (
     LLMSufficiencyJudge,
+    ScoreFloorBackstopJudge,
     judge_parse_fallback_counts,
     reset_judge_parse_fallback_counts,
 )
@@ -413,3 +414,63 @@ class TestJudgeParseFallbackCounter:
             "Judge parse fallback: cause=unparseable -> sufficient, total=2"
             in lines
         )
+
+
+# ---------------------------------------------------------------------------
+# ScoreFloorBackstopJudge
+# ---------------------------------------------------------------------------
+
+
+class TestScoreFloorBackstopJudge:
+    """Hermetic tests for the score-floor backstop (PLAN §H finding 6)."""
+
+    def _make_result(self, score: float = 0.9, text: str = "chunk") -> RetrieverResult:
+        return RetrieverResult(
+            chunk=Chunk(id="c1", content=text, heading_path="/h", source_file="s.md", chunk_index=0),
+            score=score,
+        )
+
+    def _make_judge(self, verdict: str = "sufficient") -> LLMSufficiencyJudge:
+        payload = (
+            '{"verdict": "' + verdict + '", "reason": "stub", '
+            '"reformulated_query": null, "needs_tool": false}'
+        )
+        return LLMSufficiencyJudge(StubGenerator(payload))
+
+    def test_pass_through_when_floor_disabled(self) -> None:
+        """floor=0.0 must never override the LLM verdict, even with a weak score."""
+        judge = ScoreFloorBackstopJudge(self._make_judge("sufficient"), score_floor=0.0)
+        j = judge.judge("q", [self._make_result(0.01)], "q")
+        assert j.verdict == "sufficient"
+
+    def test_pass_through_when_above_floor(self) -> None:
+        judge = ScoreFloorBackstopJudge(self._make_judge("sufficient"), score_floor=0.5)
+        j = judge.judge("q", [self._make_result(0.8)], "q")
+        assert j.verdict == "sufficient"
+
+    def test_forces_insufficient_when_below_floor(self) -> None:
+        judge = ScoreFloorBackstopJudge(self._make_judge("sufficient"), score_floor=0.5)
+        j = judge.judge("q", [self._make_result(0.3)], "q")
+        assert j.verdict == "insufficient"
+        assert "score floor" in j.reason
+
+    def test_forces_insufficient_when_results_empty(self) -> None:
+        judge = ScoreFloorBackstopJudge(self._make_judge("sufficient"), score_floor=0.5)
+        j = judge.judge("q", [], "q")
+        assert j.verdict == "insufficient"
+
+    def test_preserves_needs_tool_when_floor_overrides(self) -> None:
+        """Even when the backstop overrides verdict, needs_tool stays true so
+        the graph can still route to the GitHub tool (Phase 3)."""
+        payload = (
+            '{"verdict": "sufficient", "reason": "stub", '
+            '"reformulated_query": null, "needs_tool": true, '
+            '"tool_request": {"name": "github.search_issues", "params": {"q": "x"}}}'
+        )
+        judge = ScoreFloorBackstopJudge(
+            LLMSufficiencyJudge(StubGenerator(payload)), score_floor=0.5
+        )
+        j = judge.judge("q", [self._make_result(0.1)], "q")
+        assert j.verdict == "insufficient"
+        assert j.needs_tool is True
+        assert j.tool_request is not None

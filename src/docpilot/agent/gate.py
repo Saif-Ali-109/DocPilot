@@ -8,7 +8,8 @@ LLM, no randomness.
 Signal definitions (PLAN §3 locked decisions, tuned against the §3.8 seed
 set — PLAN wins over the task's draft proposal where they conflict):
 
-    1. **long_question** — more than :data:`SIMPLE_WORD_LIMIT` (18) words.
+    1. **long_question** — more than the word-count threshold words (default 18,
+       from :data:`config.AGENT_GATE_LONG_THRESHOLD`, overridable per-instance).
     2. **connectors** — the normalised question contains reasoning /
        comparison / joiner language from :data:`CONNECTORS` (e.g. ``and``,
        ``or``, ``when``, ``because``, ``without``, ``combine``,
@@ -162,6 +163,22 @@ class HeuristicQueryClassifier(QueryClassifier):
     definitions.
     """
 
+    def __init__(self, long_word_limit: int | None = None) -> None:
+        """Set the long-question word-count threshold.
+
+        Args:
+            long_word_limit: The word count above which the ``long_question``
+                signal fires.  ``None`` reads ``config.AGENT_GATE_LONG_THRESHOLD``
+                (default 18) — the config knob is wired here (PLAN §6 finding).
+        """
+        from docpilot import config
+
+        self._long_word_limit = (
+            long_word_limit
+            if long_word_limit is not None
+            else config.AGENT_GATE_LONG_THRESHOLD
+        )
+
     def classify(self, question: str) -> GateDecision:
         """Classify *question* using heuristic signals.
 
@@ -179,7 +196,7 @@ class HeuristicQueryClassifier(QueryClassifier):
 
         # 1. Word count
         words = normalised.split()
-        if len(words) > SIMPLE_WORD_LIMIT:
+        if len(words) > self._long_word_limit:
             signals.append("long_question")
 
         # 2. Connector words / phrases (question openers already removed)

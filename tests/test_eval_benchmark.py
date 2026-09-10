@@ -98,11 +98,13 @@ def _tool_step() -> LoopTraceStep:
 class TestCommittedDataset:
     def test_loads_and_category_counts(self):
         q = load_benchmark(DATASET_PATH)
-        assert len(q) == 15
+        # 30 rows since the pre-Phase-6 hardening expansion (PLAN §H finding 5):
+        # +12 docs-answerable (exact-identifier/multi-hop), +3 neither.
+        assert len(q) == 30
         assert {c: sum(1 for x in q if x.category == c) for c in bm.VALID_CATEGORIES} == {
-            "docs-answerable": 8,
+            "docs-answerable": 20,
             "live-state-answerable": 4,
-            "neither": 3,
+            "neither": 6,
         }
         ids = [x.id for x in q]
         assert len(set(ids)) == len(ids), "question ids must be unique"

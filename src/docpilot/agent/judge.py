@@ -139,6 +139,82 @@ class LLMSufficiencyJudge(SufficiencyJudge):
         return judgment
 
 
+class ScoreFloorBackstopJudge(SufficiencyJudge):
+    """Score-floor sanity backstop around a wrapped :class:`SufficiencyJudge`.
+
+    An LLM-as-judge is vulnerable to prompt drift and overconfidence on weak
+    retrieval.  This wrapper adds a cheap, non-LLM cross-check (pre-Phase-6
+    hardening finding): when the *top retrieval score* sits below a
+    configurable floor, the verdict is forced to ``"insufficient"`` so the
+    loop can never route straight to ``answer`` on thin evidence — exactly
+    the "I don't know" trustworthiness gap SPEC §6.3 targets.
+
+    Behaviour matrix:
+
+    * ``score_floor <= 0.0`` (default) → pass-through, zero behaviour change.
+    * top score ≥ floor → pass-through (the LLM verdict stands).
+    * top score < floor → verdict forced to ``"insufficient"``; the wrapped
+      judge's ``needs_tool`` / ``tool_request`` / ``reformulated_query`` are
+      **preserved** so live-state questions can still reach the GitHub tool /
+      retry — the backstop only kills unconditional answering on weak
+      evidence, it never blocks the tool or reformulation path.
+    * empty ``results`` → verdict forced to ``"insufficient"`` when a floor
+      is active (nothing to answer from).
+    """
+
+    def __init__(self, inner: SufficiencyJudge, score_floor: float) -> None:
+        """Wrap *inner* with a top-score floor.
+
+        Args:
+            inner: The LLM (or any) judge whose verdicts get sanity-checked.
+            score_floor: Minimum acceptable top retrieval score.  ``0.0`` or
+                negative disables the backstop (pure pass-through).
+        """
+        self._inner = inner
+        self._score_floor = float(score_floor)
+
+    def judge(
+        self,
+        question: str,
+        results: list[RetrieverResult],
+        query_used: str,
+        *,
+        tools_available: bool = True,
+    ) -> Judgment:
+        """Apply the score floor, then delegate to the wrapped judge."""
+        judgment = self._inner.judge(
+            question, results, query_used, tools_available=tools_available
+        )
+        if self._score_floor <= 0.0:
+            return judgment
+
+        top_score = results[0].score if results else None
+        overridden = top_score is None or top_score < self._score_floor
+        if not overridden:
+            return judgment
+
+        logger.info(
+            "Judge backstop: top_score=%r < floor=%r — forcing insufficient "
+            "(wrapped verdict=%r, needs_tool=%r)",
+            top_score,
+            self._score_floor,
+            judgment.verdict,
+            judgment.needs_tool,
+        )
+        return Judgment(
+            verdict="insufficient",
+            reason=(
+                f"score floor {self._score_floor} not met "
+                f"(top_score={top_score}); LLM verdict was {judgment.verdict!r}"
+            ),
+            # Preserve the wrapped judge's recovery signals — the backstop
+            # only neutralises unconditional answering on weak evidence.
+            reformulated_query=judgment.reformulated_query,
+            needs_tool=judgment.needs_tool,
+            tool_request=judgment.tool_request,
+        )
+
+
 # ---------------------------------------------------------------------------
 # JSON parsing (tolerant)
 # ---------------------------------------------------------------------------

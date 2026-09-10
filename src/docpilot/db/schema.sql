@@ -25,3 +25,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS chunks_unique_triple
 -- Phase 1: NO ANN index. Use exact (brute-force) cosine search.
 -- Corpus is ~1-3k rows; ANN would hurt recall at this scale.
 -- Add HNSW/IVFFlat later when corpus grows, with lists ≈ rows/1000.
+
+-- Phase H (pre-Phase-6 hardening): lexical side of hybrid retrieval.
+-- Expression GIN index over the English tsvector of chunk content so
+-- Postgres full-text search (plainto_tsquery + @@) is index-backed.
+-- Referenced by retriever/lexical.py (PostgresFTSSearcher).
+CREATE INDEX IF NOT EXISTS chunks_content_fts
+    ON chunks USING GIN (to_tsvector('english', content));

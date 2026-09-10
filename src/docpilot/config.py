@@ -46,6 +46,66 @@ CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "75"))
 RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "5"))
 RETRIEVAL_LANGUAGE: str = os.getenv("RETRIEVAL_LANGUAGE", "en")
 
+# --- Reranking (PLAN §H finding 1) ---
+RERANK_ENABLED: bool = os.getenv("RERANK_ENABLED", "0") == "1"
+"""Master switch for the cross-encoder reranking pass.
+
+``0`` (default) keeps retrieval byte-identical to Phase 1–5 (pure cosine
+top-k).  ``1`` makes ``SimpleRetriever`` fetch ``RERANK_CANDIDATES`` from the
+vector store and re-score them with the ``RERANKER_MODEL`` cross-encoder
+before cutting to ``top_k``.  A cross-encoder pass over the top-N window:
+*re-orders* by query-specific relevance — it cannot resurrect a chunk the
+dense index did not retrieve at all.  Reranking alone is a candidate-in
+re-ordering lever; the exact-match recall gap is the hybrid retriever's job
+(PLAN §H finding 2).
+
+Gate evidence (PLAN §6.5.2, 2026-09-10): on the 30-row eval suite the
+cross-encoder re-orders *worse* than plain cosine — recall drops 0.900→0.850
+in every rerank variant (prefixes/weights included) — and costs ~85 s/predict
+on this CPU.  It stays default-off by evidence, not by omission."""
+
+RERANKER_MODEL: str = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-base")
+"""Cross-encoder model for ``BCEReranker`` (downloaded lazily, CPU)."""
+
+RERANK_CANDIDATES: int = int(os.getenv("RERANK_CANDIDATES", "20"))
+"""Width of the candidate window fetched before reranking down to top_k."""
+
+# --- Hybrid retrieval (PLAN §H finding 2) ---
+HYBRID_ENABLED: bool = os.getenv("HYBRID_ENABLED", "0") == "1"
+"""Master switch for hybrid (vector + lexical) retrieval.
+
+``0`` (default) keeps retrieval byte-identical to Phase 1–5 (pure cosine
+top-k).  ``1`` makes the default retriever a ``HybridRetriever`` that fuses
+the dense vector path (optionally reranked) with Postgres full-text search
+(``PostgresFTSSearcher`` over ``db/schema.sql``'s ``chunks_content_fts`` GIN
+index) via weighted reciprocal rank fusion.  The lexical half rescues exact
+API identifiers / error codes the dense index under-weights; the vector half
+rescues paraphrase queries keyword matching cannot express.  Both levers
+(re-rank + hybrid) can be on together — they act on different failure modes.
+
+Gate evidence (PLAN §6.5.2, 2026-09-10): on the 30-row eval suite the hybrid
+half *alone* improves retrieval (recall parity 0.900, MRR 0.717→0.783 at the
+2:1 weights below) for negligible latency cost; the cross-encoder reranker
+*hurts* retrieval on this corpus and stays off.  ``1`` here is the answer-
+level-gated follow-up, not yet shipped.
+"""
+
+HYBRID_TOP_K_EACH: int = int(os.getenv("HYBRID_TOP_K_EACH", "5"))
+"""Candidate-list width pulled from each half before RRF fusion."""
+
+HYBRID_RRF_K: int = int(os.getenv("HYBRID_RRF_K", "60"))
+"""RRF smoothing constant (standard value 60); higher flattens rank advantage."""
+
+HYBRID_WEIGHT_VECTOR: float = float(os.getenv("HYBRID_WEIGHT_VECTOR", "2.0"))
+"""Relative weight of the dense-vector half in RRF fusion.
+
+Gate-winning setting (PLAN §6.5.2): 2:1 vector over lexical lifted MRR
+0.717→0.783 at recall parity; 1:1 ranked lower (0.767).
+"""
+
+HYBRID_WEIGHT_LEXICAL: float = float(os.getenv("HYBRID_WEIGHT_LEXICAL", "1.0"))
+"""Relative weight of the lexical half in RRF fusion (see vector weight)."""
+
 # --- Phase 2: Agentic retrieval (SPEC §4.3, PLAN §3.5) ---
 AGENT_MAX_RETRIES: int = int(os.getenv("AGENT_MAX_RETRIES", "2"))
 """Maximum judge/reformulate iterations before the agent refuses (SPEC §4.1)."""
@@ -74,14 +134,27 @@ justifies a value — the locked evaluation gate decides, not an ad hoc guess.""
 AGENT_JUDGE_MODEL: str = os.getenv("AGENT_JUDGE_MODEL", "")
 """Optional separate Groq model for the judge; empty string → ``GROQ_MODEL``."""
 
+AGENT_JUDGE_SCORE_FLOOR: float = float(os.getenv("AGENT_JUDGE_SCORE_FLOOR", "0.0"))
+"""Score-floor sanity backstop for the LLM sufficiency judge.
+
+``0.0`` (default) disables it — the loop is identical to Phase 2/4/5
+behaviour.  When ``> 0``, :class:`ScoreFloorBackstopJudge` (agent/judge.py)
+forces an ``"insufficient"`` verdict whenever the top retrieval score is
+below the floor (or retrieval is empty), so the loop can never route
+straight to ``answer`` on thin evidence — a heuristic cross-check on the
+LLM-as-judge.  Tool and retry signals are preserved, so live-state questions
+still reach the GitHub tool.  Pre-Phase-6 hardening (PLAN §H finding 6);
+enabled only if the expanded benchmark run justifies a value."""
+
 AGENT_GATE_LONG_THRESHOLD: int = int(os.getenv("AGENT_GATE_LONG_THRESHOLD", "18"))
 """Word-count gate trigger.
 
-NOT YET WIRED — wired in coordinator pass. ``HeuristicQueryClassifier``
-(agent/gate.py) currently uses the fixed module constant ``SIMPLE_WORD_LIMIT``
-and does not expose a constructor/parameter knob, so this key is defined here
-for forward-compatibility but is not consumed anywhere yet. Do NOT edit gate.py.
-"""
+Wired into ``HeuristicQueryClassifier`` (agent/gate.py) — the classifier's
+constructor reads this key when no explicit threshold is passed (and env
+``AGENT_GATE_LONG_THRESHOLD`` overrides the code default).  The threshold is a
+heuristic (word count > this fires the ``long_question`` complexity signal);
+routing calibration against a larger eval set is a pre-Phase-6 hardening
+follow-up (PLAN §H)."""
 
 # --- Phase 3: GitHub tool (SPEC §5, PLAN §4) ---
 GITHUB_PAT: str = os.getenv("GITHUB_PAT", "")

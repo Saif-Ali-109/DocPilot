@@ -904,6 +904,110 @@ Suite: **193 passed (190 hermetic + 3 live pgvector integration)**.
       report note (fresh symmetric run on the deduped corpus)
 - [x] milestone: cut `phase-5` when §6.3 all `[x]`
 
+## 6.5 pre_phase6_hardening (external-review findings, decided 2026-09-10)
+
+- status: IMPLEMENTED (levers default OFF until benchmark-justified); benchmark
+  record below.
+- origin: external reviewer raised 7 findings on the phase-5 codebase; all 7
+  verified by the coordinator (2026-09-10). Items 4 (single VectorStore) and 7
+  (no API auth/rate-limit, SQLite-only sessions) are deferred *by design* —
+  aspirational store-swap per AGENTS.md §interfaces; demo-scale API
+  intentionality. Items 1, 2, 3, 5, 6 implemented as this §H batch.
+- decision: the user chose to solve these *before* Phase 6 (not bank-as-debt).
+
+### 6.5.1 changes
+
+| # | Finding | Change | Default |
+|---|---------|--------|---------|
+| 1 | no `Reranker` interface | `src/docpilot/reranking/` — `Reranker` ABC + `BCEReranker` (BAAI/bge-reranker-base, CPU, lazy-load); `SimpleRetriever` fetches a `RERANK_CANDIDATES` (20) window and re-scores to top_k | `RERANK_ENABLED=0` |
+| 2 | no hybrid/Bm25 | `retrieval/lexical.py` — `LexicalSearcher` ABC + `PostgresFTSSearcher` (GIN `chunks_content_fts` on `to_tsvector('english', content)`, OR-semantics `to_tsquery` + `ts_rank`, stopword-filtered); `retrieval/hybrid.py` — `HybridRetriever` fusing both halves via weighted RRF (k=60); wired in `_build_default_retriever` | `HYBRID_ENABLED=0` |
+| 3 | dead gate knob | `HeuristicQueryClassifier(long_word_limit=None)` reads `config.AGENT_GATE_LONG_THRESHOLD`; config comment no longer says "NOT YET WIRED" | 18 (unchanged) |
+| 5 | 15-question eval set | `eval/dataset/benchmark.json` expanded 15 → 30 (20 docs / 4 live / 6 neither): +12 docs-answerable exact-identifier/multi-hop rows (bd09–bd20), +3 adversarial refusals (bn04–bn06) | n/a |
+| 6 | judge = 1 LLM call, no cross-check | `ScoreFloorBackstopJudge` wrapper in `agent/judge.py` — forces `insufficient` when top retrieval score < floor (or results empty) while preserving `needs_tool`/`tool_request`; wired in `_build_default_judge` | `AGENT_JUDGE_SCORE_FLOOR=0.0` |
+
+Icon: levers ship default-OFF so the committed baseline (stamp `20260910_201739`,
+levers-off) stays byte-identical behaviour; evidence gate below decides whether
+to flip them on.
+
+### 6.5.2 retrieval-level evidence (zero-LLM recall probe, language="en" to mirror `RETRIEVAL_LANGUAGE`)
+
+Probe = direct retriever calls (no LLM, no quota); recall@5 / MRR@5 over the 20
+docs-answerable rows, gold sources as offered-source recall. Baseline = Phase 1
+cosine top-5 as committed.
+
+| Config | recall@5 | MRR@5 |
+|--------|---------|-------|
+| **baseline** (levers off) | **0.900** (18/20) | **0.717** |
+| both levers ON (rerank@20 + hybrid 1:1) | 0.850 (17/20) | 0.597 |
+
+**Attribution + tuning pass** (one embed/search/rerank pass shared across all
+configs, no LLM; bge "query:"/"passage:" prefix variant included):
+
+| Config | recall@5 | MRR@5 |
+|--------|---------|-------|
+| rerank (bge, plain) | 0.850 | 0.632 |
+| rerank (bge, `query:`/`passage:` prefixes) | 0.850 | 0.679 |
+| hybrid 1:1 | 0.900 | 0.767 |
+| **hybrid 2:1 (vector-heavy)** | **0.900** | **0.783** |
+| both (rerank + hybrid) 1:1 | 0.850 | 0.597 |
+| both 2:1 / both-fts3 / pfx-both-w2 | 0.850 | 0.603 / 0.629 / 0.704 |
+
+**Verdict (evidence-backed):**
+- **Reranker stays OFF.** Every rerank variant lowers recall (0.900→0.850) and
+  MRR — even with the bge-required prefixes — and costs ~85 s/predict on this
+  CPU (≈3 min per query end-to-end). The cross-encoder re-orders toward
+  *related* topics, not gold sources (bd17 debug: behind-a-proxy.md,
+  custom-response.md instead of header-params.md). Not a corpus match.
+- **Hybrid (vector + FTS) is a strict retrieval winner:** 2:1 weights keep
+  recall at 0.900 and lift MRR 0.717→0.783 (1:1 → 0.767) at near-zero latency
+  cost (FTS + RRF only). `HYBRID_WEIGHT_VECTOR=2.0` / `HYBRID_WEIGHT_LEXICAL=1.0`
+  are now the sanctioned defaults (inert while disabled).
+- **"Both" levers compound harm** (worse than either alone) — do not combine
+  them on this corpus.
+- bd17/bd18 (Header / Depends paraphrase cold-start) unreachable by *any*
+  config — no query term reaches the gold source; only agentic reformulation
+  (Phase-2 loop) can change the query. Not a retrieval-lever fix.
+
+**Standing decisions:**
+- `HYBRID_ENABLED` stays `0` (default-off) until the answer-level gate on the
+  hybrid-2:1 config passes — retrieval-level gains are necessary but not
+  sufficient (AGENTS.md evidence-first precedent, judge-skip).
+- `RERANK_ENABLED` stays `0` on the retrieval evidence above; no answer-level
+  spend is warranted for a config that loses at retrieval.
+
+### 6.5.3 answer-level evidence
+
+Plan pivoted mid-gate: the levers-off **expanded-baseline run** (30 rows, both
+pipelines; stamp `20260910_215240`) is now the committed reference that
+supersedes the 15-row `20260910_201739` for post-hardening comparisons. The
+classic half **completed**; the agentic half was **stalled by the Groq daily TPD
+wall** (199,155/200,000 used by day's end; 0 agentic rows persisted; resume
+left for the next bucket). No *anys* lever-on answer-level spend happened —
+the 6.5.2 table shows why (levers strictly worse at retrieval), so the
+retrieval gate already rules the levers off; if tuning finds a winner it needs
+a fresh answer-level day before flipping defaults.
+
+**Expanded baseline — classic pipeline, levers OFF, stamp `20260910_215240`:**
+
+| Metric | value |
+|--------|-------|
+| answer_correctness | 0.8167 (24.5/30) |
+| retrieval_recall@k | 0.900 (18/20 — matches the zero-LLM probe exactly) |
+| citation_validity | 1.000 (n=14) |
+| citation_gold_accuracy | 0.628 (n=13) |
+| refusal_accuracy | 1.000 (6/6 — bn01–bn06 all correct) |
+| groundedness_rate | 0.762 (16/21) |
+| avg_latency_ms | 11,130 |
+| retrieval/tool calls | 1.0 / 0.0 |
+
+Groundedness with the expanded set is the clearest weak spot (bd03/bd05/bd14/
+bd20 ungrounded; bd09/bd18 partial facts; bd17/bd18 recall-miss) — a Phase 6
+input but **not** fixed by either lever.
+
+**Pending:** agentic half of `20260910_215240` (same 30 rows, levers off,
+`--resume`) — next TPD bucket; then the sidecar comparison vs classic and the
+15-row overlap vs `20260910_201739`.
+
 ## 7. phase_6: "Code Generation / Validation"
 - status: PLANNED
 - summary: >

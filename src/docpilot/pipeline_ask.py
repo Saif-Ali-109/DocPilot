@@ -113,7 +113,29 @@ def _build_default_retriever():
             "pgvector schema — is the server running and is the 'vector' "
             f"extension available? ({exc})"
         ) from exc
-    return SimpleRetriever(BGEEmbeddingProvider(), store), conn
+    embedding_provider = BGEEmbeddingProvider()
+    retriever = SimpleRetriever(embedding_provider, store)
+    if config.RERANK_ENABLED:
+        from docpilot.reranking.reranker import BCEReranker
+
+        retriever = SimpleRetriever(
+            embedding_provider, store, reranker=BCEReranker()
+        )
+    if config.HYBRID_ENABLED:
+        from docpilot.retrieval.hybrid import HybridRetriever
+        from docpilot.retrieval.lexical import PostgresFTSSearcher
+
+        # Vector half = the (possibly reranked) dense retriever above;
+        # lexical half = Postgres full-text over the same chunks table.
+        retriever = HybridRetriever(
+            retriever,
+            PostgresFTSSearcher(conn),
+            top_k_each=config.HYBRID_TOP_K_EACH,
+            rrf_k=config.HYBRID_RRF_K,
+            weight_vector=config.HYBRID_WEIGHT_VECTOR,
+            weight_lexical=config.HYBRID_WEIGHT_LEXICAL,
+        )
+    return retriever, conn
 
 
 def ask(

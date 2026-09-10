@@ -4,7 +4,7 @@
     "created": "2026-09-08",
     "phase": 4,
     "spec_reference": "SPEC §6.1 — baseline metrics + classic-vs-agentic comparison",
-    "note": "The same question set runs through both pipelines (Phase 1 direct fast path vs Phase 2 agentic loop with Phase 3 GitHub tool). docs-answerable rows carry gold key facts as short paraphrase-robust fragments (an identifier or concept every correct answer must contain — verbatim corpus sentences over-penalize normal paraphrasing) + gold source files (stored corpus paths, as returned by the vector store) for retrieval recall and citation scoring; live-state rows expect the tool to fire and a cited live answer; neither rows expect the verbatim 'I don't know' refusal."
+    "note": "The same question set runs through both pipelines (Phase 1 direct fast path vs Phase 2 agentic loop with Phase 3 GitHub tool). docs-answerable rows carry gold key facts as short paraphrase-robust fragments (an identifier or concept every correct answer must contain — verbatim corpus sentences over-penalize normal paraphrasing) + gold source files (stored corpus paths, as returned by the vector store) for retrieval recall and citation scoring; live-state rows expect the tool to fire and a cited live answer; neither rows expect the verbatim 'I don't know' refusal. Expanded 2026-09-10 to 30 rows for the pre-Phase-6 hardening benchmark (PLAN §H): +12 docs-answerable (exact-identifier / keyword rows bd09–bd15, bd17–bd20 + cross-chapter multi-hop stressor bd16) and +3 neither (adversarial refusals bn04–bn06)."
   },
   "questions": [
     {
@@ -165,6 +165,172 @@
       "gold_sources": [],
       "gold_refusal": true,
       "note": "Personal/org info — scoped GitHub tool cannot answer; must refuse."
+    },
+    {
+      "id": "bd09",
+      "category": "docs-answerable",
+      "question": "What exception does FastAPI raise when a request body fails validation, and how do I override its default error response?",
+      "gold_key_facts": [
+        "RequestValidationError",
+        "exception handler"
+      ],
+      "gold_sources": ["en/docs/tutorial/handling-errors.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion (2026-09-10): exact-identifier row — RequestValidationError + @app.exception_handler; keyword-match stressor for the lexical half."
+    },
+    {
+      "id": "bd10",
+      "category": "docs-answerable",
+      "question": "How do I set a custom HTTP status code on a path operation, for example 201 Created?",
+      "gold_key_facts": [
+        "status_code"
+      ],
+      "gold_sources": ["en/docs/tutorial/response-status-code.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: status_code decorator parameter; 201 example mirrors the corpus page."
+    },
+    {
+      "id": "bd11",
+      "category": "docs-answerable",
+      "question": "What does the response_model parameter do, and how do I omit unset fields from the response?",
+      "gold_key_facts": [
+        "response_model",
+        "response_model_exclude_unset"
+      ],
+      "gold_sources": ["en/docs/tutorial/response-model.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: two-part exact-identifier row (response_model + response_model_exclude_unset)."
+    },
+    {
+      "id": "bd12",
+      "category": "docs-answerable",
+      "question": "How do I enable CORS so a browser frontend on another origin can call my FastAPI API?",
+      "gold_key_facts": [
+        "CORSMiddleware",
+        "allow_origins"
+      ],
+      "gold_sources": ["en/docs/tutorial/cors.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: exact-identifier row (CORSMiddleware, allow_origins)."
+    },
+    {
+      "id": "bd13",
+      "category": "docs-answerable",
+      "question": "What classes does FastAPI provide for accepting file uploads in an endpoint, and where does the uploaded data end up?",
+      "gold_key_facts": [
+        "UploadFile",
+        "File"
+      ],
+      "gold_sources": ["en/docs/tutorial/request-files.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: exact-identifier row (UploadFile + File in memory / bytes)."
+    },
+    {
+      "id": "bd14",
+      "category": "docs-answerable",
+      "question": "How do I split my FastAPI app into multiple modules with their own routers and register them?",
+      "gold_key_facts": [
+        "APIRouter",
+        "include_router"
+      ],
+      "gold_sources": ["en/docs/tutorial/bigger-applications.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: exact-identifier row (APIRouter + include_router)."
+    },
+    {
+      "id": "bd15",
+      "category": "docs-answerable",
+      "question": "How do I return a custom JSON response of my own instead of letting FastAPI build the response model?",
+      "gold_key_facts": [
+        "JSONResponse"
+      ],
+      "gold_sources": ["en/docs/advanced/custom-response.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: exact-identifier row (JSONResponse in advanced/custom-response)."
+    },
+    {
+      "id": "bd16",
+      "category": "docs-answerable",
+      "question": "Can a single endpoint declare both a path parameter and a request body at the same time, and which chapters of the tutorial document each?",
+      "gold_key_facts": [
+        "path parameter",
+        "request body"
+      ],
+      "gold_sources": ["en/docs/tutorial/path-params.md", "en/docs/tutorial/body.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: cross-chapter multi-hop row — correct answer must synthesise path-params + body."
+    },
+    {
+      "id": "bd17",
+      "category": "docs-answerable",
+      "question": "How do I read custom HTTP headers that a client sends to my FastAPI endpoint?",
+      "gold_key_facts": [
+        "Header"
+      ],
+      "gold_sources": ["en/docs/tutorial/header-params.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: exact-identifier row (Header)."
+    },
+    {
+      "id": "bd18",
+      "category": "docs-answerable",
+      "question": "How do I share code between multiple path operations, like checking the same token on every route?",
+      "gold_key_facts": [
+        "Depends",
+        "dependencies"
+      ],
+      "gold_sources": ["en/docs/tutorial/dependencies/index.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: exact-identifier row (Depends / dependencies)."
+    },
+    {
+      "id": "bd19",
+      "category": "docs-answerable",
+      "question": "How do I add custom middleware that runs for every request in my FastAPI application?",
+      "gold_key_facts": [
+        "@app.middleware"
+      ],
+      "gold_sources": ["en/docs/tutorial/middleware.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: exact-identifier row (@app.middleware decorator)."
+    },
+    {
+      "id": "bd20",
+      "category": "docs-answerable",
+      "question": "How do I receive HTML form fields instead of JSON in a FastAPI endpoint?",
+      "gold_key_facts": [
+        "Form"
+      ],
+      "gold_sources": ["en/docs/tutorial/request-forms.md"],
+      "gold_refusal": false,
+      "note": "Hardening expansion: exact-identifier row (Form)."
+    },
+    {
+      "id": "bn04",
+      "category": "neither",
+      "question": "Which rate limiting middleware does the FastAPI documentation recommend?",
+      "gold_key_facts": [],
+      "gold_sources": [],
+      "gold_refusal": true,
+      "note": "Hardening expansion: not documented — corpus has no rate-limiting guidance; tool cannot answer recommendations; must refuse."
+    },
+    {
+      "id": "bn05",
+      "category": "neither",
+      "question": "How do I install the DocPilot package from PyPI?",
+      "gold_key_facts": [],
+      "gold_sources": [],
+      "gold_refusal": true,
+      "note": "Hardening expansion: DocPilot is not in the FastAPI corpus — self-referential trap; must refuse."
+    },
+    {
+      "id": "bn06",
+      "category": "neither",
+      "question": "What is the default maximum request body size in bytes that FastAPI accepts?",
+      "gold_key_facts": [],
+      "gold_sources": [],
+      "gold_refusal": true,
+      "note": "Hardening expansion: corpus states no numeric limit — an answer plucked from general HTTP knowledge would be ungrounded; must refuse."
     }
   ]
 }

@@ -7,6 +7,7 @@ against a real PostgreSQL (skipped when unavailable).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Sequence
 
 import numpy as np
@@ -15,6 +16,7 @@ import pytest
 from docpilot.core.models import Chunk, RetrieverResult
 from docpilot.retrieval.vector_store import VectorStore, _first_distinct_rows
 from docpilot.retrieval.retriever import SimpleRetriever, Retriever
+from docpilot.reranking.reranker import BCEReranker, Reranker
 
 
 # ======================================================================
@@ -290,6 +292,135 @@ class TestFirstDistinctRows:
         ]
         out = _first_distinct_rows(rows, top_k=5)
         assert len(out) == 2  # only 2 distinct triples exist
+
+
+# ======================================================================
+# Reranker pass (PLAN §H finding 1)
+# ======================================================================
+
+class FakeReranker(Reranker):
+    """Deterministic reranker that inverts the candidate order."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int]] = []
+
+    def rerank(
+        self, query: str, results: list[RetrieverResult], top_k: int
+    ) -> list[RetrieverResult]:
+        self.calls.append((query, len(results)))
+        reordered = sorted(results, key=lambda r: r.chunk.chunk_index, reverse=True)
+        return [replace(r, score=float(100 - r.chunk.chunk_index)) for r in reordered[:top_k]]
+
+
+class RecordingVectorStore(InMemoryVectorStore):
+    """InMemoryVectorStore that records the last search window width."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.last_search_top_k: int | None = None
+
+    def search(self, query_embedding, top_k=5, *, language=None):
+        self.last_search_top_k = top_k
+        return super().search(query_embedding, top_k=top_k, language=language)
+
+
+class TestRerankedRetriever:
+    """SimpleRetriever with a reranker fetches a wider window, then cuts."""
+
+    def _make_retriever(self, reranker, candidates=None, top_k=None):
+        store = RecordingVectorStore()
+        chunks = [
+            Chunk(
+                id=f"c{i}",
+                content=f"content {i}",
+                heading_path=f"/h{i}",
+                source_file=f"s{i}.md",
+                chunk_index=i,
+            )
+            for i in range(10)
+        ]
+        embeddings = np.zeros((10, FakeEmbeddingProvider.DIMENSION), dtype=np.float32)
+        for i in range(10):
+            embeddings[i, i] = 1.0
+        store.add(chunks, embeddings)
+        retriever = SimpleRetriever(
+            FakeEmbeddingProvider(), store, reranker=reranker, rerank_candidates=candidates
+        )
+        return retriever, store
+
+    def test_window_wider_than_top_k_then_cut(self) -> None:
+        reranker = FakeReranker()
+        retriever, store = self._make_retriever(reranker, candidates=8)
+        out = retriever.retrieve("q", top_k=3)
+        assert store.last_search_top_k == 8  # candidate window
+        assert len(out) == 3
+        # FakeReranker inverted order → highest chunk_index first.
+        assert [r.chunk.chunk_index for r in out] == [9, 8, 7]
+        assert reranker.calls == [("q", 8)]
+
+    def test_no_reranker_uses_exact_top_k(self) -> None:
+        retriever, store = self._make_retriever(None)
+        out = retriever.retrieve("q", top_k=3)
+        assert store.last_search_top_k == 3
+        assert len(out) == 3
+
+    def test_default_candidates_from_config(self, monkeypatch) -> None:
+        import docpilot.config as docpilot_config
+
+        monkeypatch.setattr(docpilot_config, "RERANK_CANDIDATES", 6)
+        retriever, store = self._make_retriever(FakeReranker(), candidates=None)
+        retriever.retrieve("q", top_k=3)
+        assert store.last_search_top_k == 6
+
+    def test_rerank_candidates_cannot_shrink_below_top_k(self) -> None:
+        retriever, store = self._make_retriever(FakeReranker(), candidates=1)
+        retriever.retrieve("q", top_k=3)
+        assert store.last_search_top_k == 3  # max(candidates, top_k)
+
+
+class TestBCEReranker:
+    """Hermetic tests for BCEReranker with a stubbed cross-encoder."""
+
+    class _FakeCrossEncoder:
+        def __init__(self) -> None:
+            self.predicted_pairs = []
+
+        def predict(self, pairs):
+            self.predicted_pairs = list(pairs)
+            # Deterministic scores: longer content → more relevant.
+            return [float(len(p[1])) for p in pairs]
+
+    def test_rerank_orders_by_cross_encoder_score(self, monkeypatch) -> None:
+        reranker = BCEReranker(model_name="hermetic-test-model")
+        fake = self._FakeCrossEncoder()
+        monkeypatch.setattr(reranker, "_get_or_load_model", lambda: fake)
+
+        results = [
+            RetrieverResult(
+                chunk=Chunk(id="a", content="xy", heading_path="/a", source_file="a.md", chunk_index=0),
+                score=0.9,
+            ),
+            RetrieverResult(
+                chunk=Chunk(id="b", content="longer content here", heading_path="/b", source_file="b.md", chunk_index=1),
+                score=0.8,
+            ),
+        ]
+        out = reranker.rerank("q", results, top_k=1)
+        assert len(out) == 1
+        assert out[0].chunk.id == "b"  # longer content scored higher
+        assert out[0].score == float(len("longer content here"))
+        assert fake.predicted_pairs == [("q", "xy"), ("q", "longer content here")]
+
+    def test_rerank_empty_and_zero_top_k(self) -> None:
+        reranker = BCEReranker(model_name="hermetic-test-model")
+        assert reranker.rerank("q", [], top_k=5) == []
+        results = [
+            RetrieverResult(
+                chunk=Chunk(id="a", content="x", heading_path="/a", source_file="a.md", chunk_index=0),
+                score=0.9,
+            )
+        ]
+        assert reranker.rerank("q", results, top_k=0) == []
 
 
 # ======================================================================

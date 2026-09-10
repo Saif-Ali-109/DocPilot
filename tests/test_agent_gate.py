@@ -164,3 +164,32 @@ class TestHeuristicGate:
         for question in by_category["refuse"]:
             decision = self.gate.classify(question)
             assert isinstance(decision.agentic, bool)
+
+
+class TestGateConfigurableThreshold:
+    """AGENT_GATE_LONG_THRESHOLD knob is wired (PLAN §H finding 3)."""
+
+    def test_default_threshold_fires_only_past_18_words(self) -> None:
+        gate = HeuristicQueryClassifier()
+        # 18 words exactly → no long_question signal (default threshold 18).
+        q18 = " ".join(["word"] * 18)
+        assert gate.classify(q18).signals == []
+        # 19 words → fires.
+        q19 = " ".join(["word"] * 19)
+        assert any(
+            s.startswith("long_question") for s in gate.classify(q19).signals
+        )
+
+    def test_custom_threshold_overrides_default(self) -> None:
+        gate = HeuristicQueryClassifier(long_word_limit=40)
+        q25 = "I want to know the most efficient way to deploy a small fastapi " "application on a single low cost server instance"
+        assert len(q25.split()) <= 40
+        decision = gate.classify(q25)
+        assert decision.agentic is False
+        assert decision.signals == []
+
+    def test_very_low_threshold_fires_short_question(self) -> None:
+        gate = HeuristicQueryClassifier(long_word_limit=4)
+        decision = gate.classify("How do I install FastAPI?")
+        assert decision.agentic is True
+        assert any(s.startswith("long_question") for s in decision.signals)

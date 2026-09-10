@@ -4,7 +4,7 @@ An evidence-driven agentic RAG system for technical documentation.
 
 DocPilot ingests Markdown/MDX documentation (code blocks, nested headings, cross-references) and answers questions using retrieved evidence. Rather than naive retrieve-and-answer, it evaluates whether its evidence is sufficient, retries searches when it isn't, and says **"I don't know"** rather than hallucinating. Every retrieval and tool decision is loggable and inspectable.
 
-> **Status:** Phases 1–5 complete (Classic RAG → Agentic Retrieval → GitHub tooling → Evaluation → API/UI). Phase 5 (API + UI) is benchmarked and tag-closed: async FastAPI backend, SSE streaming, citations + retrieved-context debug panel, SQLite session history, Chainlit UI, hardening after-run recorded (gate stamp `20260910_201739`, both pipelines on the deduped corpus). See [PLAN.md](PLAN.md) for the build plan and [SPEC.md](SPEC.md) for the authoritative specification.
+> **Status:** Phases 1–5 complete (Classic RAG → Agentic Retrieval → GitHub tooling → Evaluation → API/UI), plus the pre-Phase-6 hardening batch (Plan §H): cross-encoder reranking, hybrid vector+FTS retrieval, gate-knob wiring, judge score-floor backstop, and a benchmark expansion to 30 questions. Levers ship default-OFF; the gate benchmark decides whether to flip them on. See [PLAN.md](PLAN.md) for the build plan and [SPEC.md](SPEC.md) for the authoritative specification.
 
 ## Current scope
 
@@ -15,6 +15,10 @@ DocPilot ingests Markdown/MDX documentation (code blocks, nested headings, cross
 - **Generation:** Groq, temperature 0, retry/backoff; token usage recorded per answer
 - **Output:** cited answers with inline `[1]` source markers + footer (sources tagged by kind — tutorial/advanced/reference/… — to steer the LLM to the most specific file); per-step agent trace in `--debug` / `--json`
 - **API + UI (Phase 5, complete):** async FastAPI backend with SSE token streaming; `POST /api/v1/chat` returns a `gate → search → token… → answer → done` event stream; SQLite session/chat history (`/api/v1/sessions`); Chainlit UI renders the live trace, a retrieval debug panel (chunks + scores) and cited sources
+- **Pre-Phase-6 hardening (Plan §H):** optional retrieval levers (all default OFF — enabled when benchmark justifies)
+  - **Cross-encoder reranking** (`RERANK_ENABLED=1`): fetches a wider candidate window (`RERANK_CANDIDATES=20`), re-scores with `BAAI/bge-reranker-base` via sentence-transformers `CrossEncoder`, keeps the top-k by reranked relevance. Gate verdict: implemented and tested but **not** enabled — it loses to plain cosine at retrieval (recall 0.900→0.850) and costs ~85 s/predict on CPU (PLAN §6.5.2). Kept as the `Reranker` interface implementation for corpus-specific A/B.
+  - **Hybrid retrieval** (`HYBRID_ENABLED=1`): fuses the dense vector path with a Postgres full-text search (`to_tsquery` OR-semantics + `ts_rank`, GIN index on `chunks.content`) via weighted Reciprocal Rank Fusion — rescues exact API identifiers and error codes the dense index under-weights. Gate verdict (PLAN §6.5.2): hybrid **alone** at the 2:1 vector:lexical weights is a strict retrieval winner (recall parity 0.900, MRR 0.717→0.783, near-zero latency); the cross-encoder reranker **hurts** retrieval on this corpus (0.850 recall in every variant, ~85 s/predict on CPU) and stays off. `HYBRID_ENABLED` ships `0` until the answer-level gate confirms the retrieval-level gain.
+  - **Judge score-floor backstop** (`AGENT_JUDGE_SCORE_FLOOR` > 0): forces `insufficient` when top retrieval score falls below the floor, preserving `needs_tool`/`tool_request` for the GitHub path
 
 ## Setup
 
@@ -64,8 +68,9 @@ Broken down development is documented in PLAN.md §6.
 | 1. Classic RAG | ✅ Complete |
 | 2. Agentic retrieval | ✅ Complete |
 | 3. GitHub tooling (plain REST, no MCP) | ✅ Complete (benchmarked `phase-3`) |
-| 4. Evaluation | ✅ Complete (benchmarked `phase-4`; 15-question suite, classic-vs-agentic comparison) |
+| 4. Evaluation | ✅ Complete (benchmarked `phase-4`; 30-question suite post-H-expansion, classic-vs-agentic comparison) |
 | 5. API + UI | ✅ Complete (backend + Chainlit UI; hardening after-run recorded, gate stamp `20260910_201739`, tagged `phase-5`) |
+| 5.5 Pre-Phase-6 hardening (Plan §H) | ✅ Implemented (reranker, hybrid-FTS, gate wiring, judge score-floor, eval expansion to 30 rows); levers default OFF pending the gate benchmark |
 | 6. Code generation/validation | Planned (not implemented — do not treat as available) |
 | Framework extraction | Post-Phase 6 |
 

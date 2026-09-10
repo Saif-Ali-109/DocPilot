@@ -45,10 +45,17 @@ def _build_default_judge() -> LLMSufficiencyJudge:
     """Build the production judge over a Groq-backed generator.
 
     The judge model is ``AGENT_JUDGE_MODEL`` when set, else the shared
-    ``GROQ_MODEL`` (SPEC §4.3).
+    ``GROQ_MODEL`` (SPEC §4.3).  When ``AGENT_JUDGE_SCORE_FLOOR`` is
+    enabled, the raw LLM judge is wrapped with
+    :class:`ScoreFloorBackstopJudge` (PLAN §H finding 6).
     """
+    from docpilot.agent.judge import ScoreFloorBackstopJudge
+
     model = config.AGENT_JUDGE_MODEL or config.GROQ_MODEL
-    return LLMSufficiencyJudge(GroqGenerator(model=model))
+    judge = LLMSufficiencyJudge(GroqGenerator(model=model))
+    if config.AGENT_JUDGE_SCORE_FLOOR > 0.0:
+        return ScoreFloorBackstopJudge(judge, config.AGENT_JUDGE_SCORE_FLOOR)
+    return judge
 
 
 def _resolve_language(language: str | None) -> str:
