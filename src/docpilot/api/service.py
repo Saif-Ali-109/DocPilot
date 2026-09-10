@@ -34,6 +34,7 @@ from docpilot import config
 from docpilot.agent.gate import HeuristicQueryClassifier
 from docpilot.agent.graph import trace_step_to_dict
 from docpilot.agent.pipeline_agentic import agentic_ask
+from docpilot.agent.prompts import REFUSE_ANSWER
 from docpilot.agent.types import LoopTraceStep
 from docpilot.citations.engine import StandardCitationEngine
 from docpilot.core.models import SourceRef, derive_source_kind
@@ -307,6 +308,7 @@ def _run_direct(
         # ── cite ──────────────────────────────────────────────────────────
         answer, footer = citation_engine.format_answer(raw_response, sources)
         display = f"{answer}\n\n{footer}" if footer else answer
+        refused = REFUSE_ANSWER in raw_response  # mirrors eval benchmark §3.9
         answer_step = LoopTraceStep.new(
             "answer", question, "answer", started_at=answer_started
         )
@@ -327,7 +329,7 @@ def _run_direct(
             "type": "answer",
             "text": display,
             "sources": sources_out,
-            "refused": False,
+            "refused": refused,
             "direct": True,
         }
     )
@@ -337,7 +339,7 @@ def _run_direct(
         "question": question,
         "answer": display,
         "sources": sources_out,
-        "refused": False,
+        "refused": refused,
         "direct": True,
         "trace": trace,
         "latency_ms": latency_ms,

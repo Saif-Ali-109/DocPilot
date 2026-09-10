@@ -269,6 +269,23 @@ class TestAgenticPathEvents:
         assert answer_ev["sources"] == []
         assert out["answer"].startswith("I don't know")
 
+    def test_direct_path_refusal_flag_reflects_verbatim_answer(self) -> None:
+        """The fast path must report refused=True when the generator emits the
+        §3.9 sentence (mirrors the eval benchmark's text-based detection)."""
+        refusal = "I don't know — the available documentation does not cover this question."
+        events: list[dict] = []
+        out = ask_events(
+            SIMPLE_QUESTION,
+            strategy="direct",
+            retriever=FakeRetriever({SIMPLE_QUESTION: []}),
+            generator=StreamingFakeGenerator(refusal),
+            citation_engine=StandardCitationEngine(),
+            emit=events.append,
+        )
+        answer_ev = next(e for e in events if e["type"] == "answer")
+        assert answer_ev["refused"] is True
+        assert out["refused"] is True
+
 
 # ---------------------------------------------------------------------------
 # model knob
