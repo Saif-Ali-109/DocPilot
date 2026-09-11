@@ -70,7 +70,7 @@ Broken down development is documented in PLAN.md §6.
 | 3. GitHub tooling (plain REST, no MCP) | ✅ Complete (benchmarked `phase-3`) |
 | 4. Evaluation | ✅ Complete (benchmarked `phase-4`; 30-question suite post-H-expansion, classic-vs-agentic comparison) |
 | 5. API + UI | ✅ Complete (backend + Chainlit UI; hardening after-run recorded, gate stamp `20260910_201739`, tagged `phase-5`) |
-| 5.5 Pre-Phase-6 hardening (Plan §H) | ✅ Implemented (reranker, hybrid-FTS, gate wiring, judge score-floor, eval expansion to 30 rows); levers default OFF pending the gate benchmark |
+| 5.5 Pre-Phase-6 hardening (Plan §H) | ✅ Implemented (reranker, hybrid-FTS, gate wiring, judge score-floor, eval expansion to 30 rows). Levers default OFF: reranker loses retrieval gate; hybrid 2:1 wins retrieval (MRR +8.3%, recall parity) but `HYBRID_ENABLED` stays 0 until the answer-level classic gate (pending). Expanded baseline complete (PLAN §6.5.3): agentic 0.85 vs classic 0.817 at 2.2× latency — agentic justified only for hard questions, never as default path. |
 | 6. Code generation/validation | Planned (not implemented — do not treat as available) |
 | Framework extraction | Post-Phase 6 |
 

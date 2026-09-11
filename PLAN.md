@@ -980,12 +980,15 @@ configs, no LLM; bge "query:"/"passage:" prefix variant included):
 Plan pivoted mid-gate: the levers-off **expanded-baseline run** (30 rows, both
 pipelines; stamp `20260910_215240`) is now the committed reference that
 supersedes the 15-row `20260910_201739` for post-hardening comparisons. The
-classic half **completed**; the agentic half was **stalled by the Groq daily TPD
-wall** (199,155/200,000 used by day's end; 0 agentic rows persisted; resume
-left for the next bucket). No *anys* lever-on answer-level spend happened —
-the 6.5.2 table shows why (levers strictly worse at retrieval), so the
-retrieval gate already rules the levers off; if tuning finds a winner it needs
-a fresh answer-level day before flipping defaults.
+classic half **completed** day 1; the agentic half was **stalled** by the Groq
+daily-TPD wall twice (199,155/200,000 used; 0 rows persisted; resume lossless)
+before completing 2026-09-11 after switching to a **fresh Groq organization**
+(`org_01m288jaqwey6agkpkk8ch80vv`, new-org key set in `.bashrc` and picked up by
+launching under `bash -ic` — env var overrides the `.env` fallback). No *any*s
+lever-on answer-level spend happened — the 6.5.2 table shows why (levers
+strictly worse at retrieval), so the retrieval gate already rules the levers
+off; if tuning finds a winner it needs a fresh answer-level day before flipping
+defaults.
 
 **Expanded baseline — classic pipeline, levers OFF, stamp `20260910_215240`:**
 
@@ -1004,9 +1007,43 @@ Groundedness with the expanded set is the clearest weak spot (bd03/bd05/bd14/
 bd20 ungrounded; bd09/bd18 partial facts; bd17/bd18 recall-miss) — a Phase 6
 input but **not** fixed by either lever.
 
-**Pending:** agentic half of `20260910_215240` (same 30 rows, levers off,
-`--resume`) — next TPD bucket; then the sidecar comparison vs classic and the
-15-row overlap vs `20260910_201739`.
+**Expanded baseline — agentic pipeline, levers OFF, stamp `20260910_215240`
+(completed 2026-09-11, 30 rows, exit 0):**
+
+| Metric | value |
+|--------|-------|
+| answer_correctness | 0.850 (25.5/30) |
+| retrieval_recall@k | 0.900 (18/20 — same as classic) |
+| citation_validity | 1.000 |
+| citation_gold_accuracy | 0.694 (n=18) |
+| refusal_accuracy | 1.000 (6/6) |
+| groundedness_rate | 0.714 (15/21) |
+| avg_latency_ms | 24,772 |
+| avg retrieval calls | 1.233 |
+| avg tool calls | 0.167 (GitHub tool reached on live rows) |
+
+**Verdict (30 rows, both pipelines, installed in the report
+`benchmark_20260910_215240.json` → comparison):** agentic wins
+answer_correctness (+3.3pp) and citation_gold (+6.6pp); ties recall@k,
+citation_validity, refusal_accuracy (all 1.000/0.900 saturation); classic wins
+groundedness (−4.8pp for agentic), latency (2.2× cheaper), and both call-count
+metrics (agentic is modest: 1.23 retrievals, 0.17 tools — not runaway), **4
+classic / 2 agentic / 3 ties**. Agentic is justified *only* for hard/anomalous
+questions, never as the default path — it costs 2.2× latency for +3.3pp
+correctness with slightly worse grounding.
+
+**Reproducibility (15-row overlap vs the committed `20260910_201739`):** classic
+0.800 → 0.800 (14/15 same; sole flip bd02 0.5→1.0) and agentic 0.933 → 0.933
+(15/15 same) — the expanded baseline reproduces the committed numbers exactly.
+Note: Groq's daily TPD is a **rolling 24-hour window**, not a calendar-day reset
+(2026-09-11 evidence: same-org bucket ~99% full midday); a fresh bucket = new
+**organization**, never a same-org re-key.
+
+**Pending:** the hybrid answer-level gate — classic pipeline with
+`HYBRID_ENABLED=1` (2:1 weights), 30 rows, fresh stamp — the last answer-level
+test before `HYBRID_ENABLED` may flip on (retrieval gate: MRR 0.717→0.783,
+recall parity). Runs on the new org's bucket (8k TPM throttling makes runs
+slower but they fit within 200k TPD).
 
 ## 7. phase_6: "Code Generation / Validation"
 - status: PLANNED
