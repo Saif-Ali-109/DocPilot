@@ -51,6 +51,26 @@ _DATASET_PATH = Path(__file__).resolve().parent / "dataset" / "benchmark.json"
 _REPORTS_DIR = Path(__file__).resolve().parent / "reports"
 _MARKER_RE = re.compile(r"\[(\d+)\]")
 
+# Provider-agnostic detection of the daily-budget wall. Duck-typed on the
+# error text (no hard dependency on the Groq SDK): the provider body reads
+# "... on tokens per day (TPD): Limit 200000, Used 199562, Requested 4523 ...".
+_TPD_MARKER = "tokens per day (TPD)"
+
+
+class QuotaExhausted(RuntimeError):
+    """Fatal, non-transient: the provider's *daily* token budget is spent.
+
+    Per-minute throttling is transient and handled by the generator's own
+    retry/backoff; this is the "come back tomorrow / fresh org" wall. Rows
+    already checkpointed to disk are safe — resume with the same
+    ``--resume STAMP --pipeline <name>`` after the bucket refills.
+    """
+
+
+def is_tpd_exhaustion(exc: BaseException) -> bool:
+    """True when *exc* is a daily-token (TPD) exhaustion, not per-minute."""
+    return isinstance(exc, BaseException) and _TPD_MARKER in str(exc)
+
 GROUNDEDNESS_SYSTEM: str = (
     "You audit whether the factual claims in an ANSWER are supported by the "
     "provided SOURCES. If any claim goes beyond the sources or contradicts "
@@ -270,6 +290,65 @@ def _score_question(
     return 1.0 if out.refused else 0.0
 
 
+def _load_done_ids(checkpoint_path: str | Path | None) -> set[str]:
+    """Ids already scored and persisted in the row-checkpoint file.
+
+    Tolerates a torn trailing line (crash mid-append) by skipping unparsable
+    records — a partial last line only costs re-scoring that one question.
+    """
+    if checkpoint_path is None:
+        return set()
+    path = Path(checkpoint_path)
+    if not path.exists():
+        return set()
+    done: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            done.add(json.loads(line)["id"])
+        except (json.JSONDecodeError, KeyError, TypeError):
+            continue
+    return done
+
+
+def _load_checkpoint_rows(checkpoint_path: str | Path | None) -> list[BenchmarkRow]:
+    """Reconstruct previously scored rows from the row-checkpoint file.
+
+    Used on resume so the aggregated report always spans the *full* question
+    set — new rows join (not replace) the checkpointed ones. Torn lines are
+    dropped (their question is simply re-run).
+    """
+    if checkpoint_path is None:
+        return []
+    path = Path(checkpoint_path)
+    if not path.exists():
+        return []
+    rows: list[BenchmarkRow] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        try:
+            rows.append(BenchmarkRow(**payload))
+        except (TypeError, ValueError):
+            continue
+    return rows
+
+
+def _append_checkpoint(checkpoint_path: str | Path | None, row: BenchmarkRow) -> None:
+    """Append one scored row to the row-checkpoint file (jsonl)."""
+    if checkpoint_path is None:
+        return
+    with open(checkpoint_path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(_row_to_dict(row)) + "\n")
+
+
 def run_pipeline(
     benchmark: list[BenchmarkQuestion],
     pipeline: str,
@@ -277,6 +356,7 @@ def run_pipeline(
     *,
     grounding_checker=None,
     generated_at: str | None = None,
+    checkpoint_path: str | Path | None = None,
 ) -> PipelineReport:
     """Score one pipeline over the benchmark.
 
@@ -287,10 +367,29 @@ def run_pipeline(
 
     ``grounding_checker`` is any callable ``(answer, source_files) -> bool``
     applied to *answered* rows only (refusals carry no factual claims).
+
+    ``checkpoint_path`` enables crash-safe recovery: each scored row is
+    appended to a jsonl file immediately, and ids already present are skipped
+    on re-entry — so a mid-run daily-quota (TPD) abort never re-burns quota on
+    questions that already scored. When a run ends, the caller decides whether
+    to keep the checkpoint (aborted) or delete it (completed).
     """
-    rows: list[BenchmarkRow] = []
+    done = _load_done_ids(checkpoint_path)
+    if done:
+        logger.warning(
+            "Benchmark %s: %d row(s) already checkpointed — skipping %s",
+            pipeline, len(done), sorted(done)[:8],
+        )
+    rows = _load_checkpoint_rows(checkpoint_path)
     for q in benchmark:
-        out = run(q.question)
+        if q.id in done:
+            continue
+        try:
+            out = run(q.question)
+        except Exception as exc:
+            if is_tpd_exhaustion(exc):
+                raise QuotaExhausted(str(exc)) from exc
+            raise
         # Refusal contract is the verbatim §3.9 sentence: a pipeline that
         # emits it has refused even if its flag wasn't set (e.g. the generator
         # self-refused on the answer path). Effective flag = flag OR text.
@@ -323,25 +422,25 @@ def run_pipeline(
         if grounding_checker is not None and not out.refused and out.answer.strip():
             grounded = bool(grounding_checker(out.answer, out.source_files))
 
-        rows.append(
-            BenchmarkRow(
-                id=q.id,
-                category=q.category,
-                gold_refusal=q.gold_refusal,
-                refused=out.refused,
-                answer=out.answer,
-                source_files=out.source_files,
-                retrieval_calls=retrieval_calls,
-                tool_calls=tool_calls,
-                latency_ms=out.latency_ms,
-                answer_correct=answer_correct,
-                recall=recall,
-                citation_validity=validity,
-                citation_gold_accuracy=gold_accuracy,
-                marker_count=len(markers),
-                grounded=grounded,
-            )
+        row = BenchmarkRow(
+            id=q.id,
+            category=q.category,
+            gold_refusal=q.gold_refusal,
+            refused=out.refused,
+            answer=out.answer,
+            source_files=out.source_files,
+            retrieval_calls=retrieval_calls,
+            tool_calls=tool_calls,
+            latency_ms=out.latency_ms,
+            answer_correct=answer_correct,
+            recall=recall,
+            citation_validity=validity,
+            citation_gold_accuracy=gold_accuracy,
+            marker_count=len(markers),
+            grounded=grounded,
         )
+        _append_checkpoint(checkpoint_path, row)
+        rows.append(row)
 
     return _aggregate(rows, pipeline=pipeline, generated_at=generated_at)
 
@@ -784,6 +883,14 @@ def run_benchmark_live(
     completes, so a quota/failure mid-run never loses the finished half; the
     combined file + comparison is written only when both sides are present.
 
+    Crash-safe row checkpoints (``<stamp>_<pipeline>.rows.jsonl``): every
+    scored row is appended as it finishes, and a resumed run skips ids already
+    in the file while still reporting over the full question set. A daily-TPD
+    quota abort raises :class:`QuotaExhausted` (CLI exit code 3) *after*
+    writing any completed sidecar + the partial combined file — nothing is
+    fabricated and no scored row is re-burned on resume. Completed checkpoints
+    are deleted when their half finishes.
+
     Resume flow: if a half crashed before completing, rerun it alone with
     ``pipeline="agentic"`` (or ``classic``) and ``stamp=<the crashed run's
     stamp>``; the finished sidecar from the crashed run is adopted and the
@@ -802,11 +909,26 @@ def run_benchmark_live(
 
     checker = GroundingChecker() if run_groundedness else None
     reports: dict[str, PipelineReport] = {}
+    quota_abort: QuotaExhausted | None = None
     for name in ("classic", "agentic"):
         if pipeline not in ("both", name):
             continue
         run = _classic_run if name == "classic" else _agentic_run
-        report = run_pipeline(benchmark, name, run, grounding_checker=checker)
+        checkpoint = out_dir / f"benchmark_{stamp}_{name}.rows.jsonl"
+        try:
+            report = run_pipeline(
+                benchmark, name, run,
+                grounding_checker=checker,
+                checkpoint_path=checkpoint,
+            )
+        except QuotaExhausted as exc:
+            quota_abort = exc
+            print(
+                "\n⛔ Daily token budget exhausted (TPD) — nothing fabricated; "
+                "scored rows are checkpointed. Resume when the bucket refills "
+                f"with: --pipeline {name} --resume {stamp}"
+            )
+            break
         report.dataset_path = str(dataset_path)
         report.note = (
             f"Live {report.pipeline} (Groq, temp 0); "
@@ -814,6 +936,7 @@ def run_benchmark_live(
             + "; docs recall@k over offered sources"
         )
         sidecar = _write_pipeline_file(out_dir, stamp, report)
+        checkpoint.unlink(missing_ok=True)
         reports[name] = report
         logger.info("Benchmark %s pipeline complete → %s", name, sidecar)
         print(format_metrics(report))
@@ -843,7 +966,9 @@ def run_benchmark_live(
             f"⚠ PARTIAL — {sorted(reports)} done, {missing} missing; "
             f"rerun with --pipeline {missing[0]} to resume, then merge."
         )
-        print(format_report(next(iter(reports.values()))))
+        if reports:
+            # No report to print when the very first pipeline aborted on quota.
+            print(format_report(next(iter(reports.values()))))
     else:
         cmp = build_comparison(reports["classic"], reports["agentic"])
         print(format_comparison(cmp))
@@ -852,6 +977,11 @@ def run_benchmark_live(
         print()
         print(format_report(reports["agentic"]))
     logger.info("Benchmark report written to %s", out_path)
+
+    if quota_abort is not None:
+        # Partial combined report is on disk; signal the abort so the CLI maps
+        # it to a distinct exit code (see main).
+        raise quota_abort
     return out_path
 
 
@@ -986,13 +1116,22 @@ def main(argv: list[str] | None = None) -> int:
             print(f"unknown argument {args[i]!r}", file=sys.stderr)
             return 2
         i += 1
-    run_benchmark_live(
-        dataset_path,
-        out_dir=out_dir,
-        run_groundedness=run_groundedness,
-        pipeline=pipeline,
-        stamp=stamp,
-    )
+    try:
+        run_benchmark_live(
+            dataset_path,
+            out_dir=out_dir,
+            run_groundedness=run_groundedness,
+            pipeline=pipeline,
+            stamp=stamp,
+        )
+    except QuotaExhausted as exc:
+        print(
+            f"quota exhausted — daily token budget spent (TPD: {exc}); "
+            f"rerun with --resume {stamp} --pipeline {pipeline} after the "
+            "bucket refills",
+            file=sys.stderr,
+        )
+        return 3
     return 0
 
 

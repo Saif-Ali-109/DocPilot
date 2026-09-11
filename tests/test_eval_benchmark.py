@@ -754,3 +754,159 @@ class TestProbe:
     def test_cli_probe_flag_returns_probe_code(self, monkeypatch):
         monkeypatch.setattr(bm, "probe_quota", lambda: 1)
         assert main(["--probe"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Daily-quota (TPD) abort + row-level checkpoints (the quota-failure safety net)
+# ---------------------------------------------------------------------------
+
+
+class TestQuotaAbortAndRowCheckpoints:
+    """A daily-TPD wall must abort cleanly (exit 3), keep the rows already
+    scored in a jsonl checkpoint, and resume by skipping exactly those."""
+
+    @staticmethod
+    def _ok(question: str) -> RunOutput:
+        return RunOutput(
+            answer="alpha fact and beta fact [1]",
+            source_files=["docs/en/docs/tutorial/a.md"],
+            refused=False,
+        )
+
+    def test_is_tpd_exhaustion_detection(self):
+        assert bm.is_tpd_exhaustion(
+            RuntimeError("Rate limit ... on tokens per day (TPD): Limit 200000, "
+                         "Used 199562, Requested 4523")
+        )
+        assert not bm.is_tpd_exhaustion(
+            RuntimeError("Rate limit ... on tokens per minute (TPM): Limit 8000, "
+                         "Used 7927, Requested 9573")
+        )
+        assert not bm.is_tpd_exhaustion(RuntimeError("connection refused"))
+        assert not bm.is_tpd_exhaustion(RuntimeError(""))
+
+    def test_tpd_abort_checkpoints_scored_rows(self, tmp_path):
+        qs = load_benchmark(DATASET_PATH)
+        calls = {"n": 0}
+
+        def runner(question: str) -> RunOutput:
+            calls["n"] += 1
+            if calls["n"] >= 4:
+                raise RuntimeError(
+                    "RateLimitError ... on tokens per day (TPD): Limit 200000, "
+                    "Used 199999, Requested 99"
+                )
+            return self._ok(question)
+
+        cp = tmp_path / "rows.jsonl"
+        with pytest.raises(bm.QuotaExhausted):
+            bm.run_pipeline(qs, "classic", runner, checkpoint_path=cp)
+        assert calls["n"] == 4  # 4th question attempted, raised before scoring
+        lines = [l for l in cp.read_text(encoding="utf-8").splitlines() if l.strip()]
+        assert len(lines) == 3  # only the 3 completed rows persisted
+        assert {json.loads(l)["id"] for l in lines} == {q.id for q in qs[:3]}
+
+    def test_resume_skips_checkpointed_rows_and_reports_full_set(self, tmp_path):
+        qs = load_benchmark(DATASET_PATH)
+        cp = tmp_path / "rows.jsonl"
+        # checkpoint the first 3 rows (as if a previous run had aborted)
+        seen = 0
+
+        def seed(question: str) -> RunOutput:
+            nonlocal seen
+            seen += 1
+            if seen > 3:
+                raise RuntimeError(
+                    "RateLimitError ... on tokens per day (TPD): "
+                    "Limit 200000, Used 199999, Requested 99"
+                )
+            return self._ok(question)
+
+        with pytest.raises(bm.QuotaExhausted):
+            bm.run_pipeline(qs, "classic", seed, checkpoint_path=cp)
+
+        calls = {"n": 0}
+
+        def resume(question: str) -> RunOutput:
+            calls["n"] += 1  # must never be called for checkpointed ids
+            assert question not in {q.question for q in qs[:3]}
+            return self._ok(question)
+
+        report = bm.run_pipeline(qs, "classic", resume, checkpoint_path=cp)
+        assert calls["n"] == len(qs) - 3
+        assert len(report.rows) == len(qs)  # full question set, not just new rows
+        assert {r.id for r in report.rows} == {q.id for q in qs}
+
+    def test_torn_trailing_line_is_tolerated(self, tmp_path):
+        qs = load_benchmark(DATASET_PATH)
+        cp = tmp_path / "rows.jsonl"
+        seen = {"n": 0}
+
+        def seed(question: str) -> RunOutput:
+            seen["n"] += 1
+            if seen["n"] > 3:
+                raise RuntimeError(
+                    "RateLimitError ... on tokens per day (TPD): "
+                    "Limit 200000, Used 199999, Requested 99"
+                )
+            return self._ok(question)
+
+        with pytest.raises(bm.QuotaExhausted):
+            bm.run_pipeline(qs, "classic", seed, checkpoint_path=cp)
+        with open(cp, "a", encoding="utf-8") as fh:
+            fh.write('{"id": ')  # torn tail from a crash mid-append
+
+        calls = {"n": 0}
+        report = bm.run_pipeline(
+            qs, "classic",
+            lambda q: calls.__setitem__("n", calls["n"] + 1) or self._ok(q),
+            checkpoint_path=cp,
+        )
+        # Torn line has no parseable id → ignored, its question is re-run.
+        assert calls["n"] == len(qs) - 3
+        assert len(report.rows) == len(qs)
+
+    def test_run_benchmark_live_quota_abort_raises_and_writes_partial(self, tmp_path, monkeypatch):
+        qs = load_benchmark(DATASET_PATH)
+        seen = {"n": 0}
+
+        def boom(question: str) -> RunOutput:
+            seen["n"] += 1
+            if seen["n"] > 2:  # score 2 rows, then hit the daily wall mid-run
+                raise RuntimeError(
+                    "RateLimitError ... on tokens per day (TPD): "
+                    "Limit 200000, Used 199999, Requested 99"
+                )
+            return self._ok(question)
+
+        monkeypatch.setattr(bm, "_classic_run", boom)
+        checkpoint_path = tmp_path / "benchmark_s1_classic.rows.jsonl"
+        with pytest.raises(bm.QuotaExhausted):
+            bm.run_benchmark_live(
+                out_dir=tmp_path, run_groundedness=False,
+                pipeline="classic", stamp="s1",
+            )
+        # partial combined report + the checkpoint survive for a clean resume;
+        # resuming with the same stamp skips exactly the 2 scored rows.
+        assert (tmp_path / "benchmark_s1.json").exists()
+        assert checkpoint_path.exists()
+        lines = [l for l in checkpoint_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        assert len(lines) == 2
+        assert {json.loads(l)["id"] for l in lines} == {q.id for q in qs[:2]}
+
+    def test_successful_half_deletes_its_checkpoint(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(bm, "_classic_run", self._ok)
+        out = bm.run_benchmark_live(
+            out_dir=tmp_path, run_groundedness=False,
+            pipeline="classic", stamp="s2",
+        )
+        assert out.exists()
+        assert not list(tmp_path.glob("benchmark_*_classic.rows.jsonl"))
+
+    def test_cli_maps_quota_abort_to_exit_3(self, monkeypatch):
+        def boom(dataset_path=None, *, out_dir=None, run_groundedness=True,
+                 pipeline="both", stamp=None):
+            raise bm.QuotaExhausted("TPD: Limit 200000, Used 199999, Requested 99")
+
+        monkeypatch.setattr(bm, "run_benchmark_live", boom)
+        assert main(["--pipeline", "classic", "--resume", "20260908_190539"]) == 3
