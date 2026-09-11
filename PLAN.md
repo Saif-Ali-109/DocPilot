@@ -1046,10 +1046,91 @@ recall parity). Runs on the new org's bucket (8k TPM throttling makes runs
 slower but they fit within 200k TPD).
 
 ## 7. phase_6: "Code Generation / Validation"
-- status: PLANNED
-- summary: >
+- status: PLANNED — gated; **no implementation before the pending hybrid
+  answer-level gate passes and the `HYBRID_ENABLED` decision is made** (see
+  §6.5 "Pending" + §10). This section is the working HOW for that phase, not a
+  license to start it.
+- summary (SPEC §8, verbatim scope): >
     Documentation retrieval → generate code → validate against retrieved
-    API/schema/examples → return code + sources. Only after core is reliable.
+    API/schema/examples → return code + sources. Only after the core is
+    reliable; never pulled into the pitch/demo until actually built.
+- build_order placement: after Phase 5 (closed) and after the §6.5 hardening
+  gate closes. Phase 6 output never enters the fast/cheap core loop — it is an
+  explicit, opt-in route (SPEC §8 guardrail + AGENTS.md rule 3).
+
+### 7.1 gate (do before writing any Phase 6 code)
+- [ ] run the hybrid answer-level gate (classic, `HYBRID_ENABLED=1`, 2:1
+      weights, 30 rows, fresh stamp) via
+      `bash -ic 'bash /tmp/opencode/run_hybrid_gate.sh'` on a fresh TPD bucket
+- [ ] record the before/after answer-level table (correctness, groundedness,
+      citation_gold, latency) in §6.5 and DECIDE `HYBRID_ENABLED` on the data
+      (recall gate already: MRR 0.717→0.783, recall parity — answer level is
+      the last evidence)
+- [ ] user sign-off to enter Phase 6 (per AGENTS.md rule 3 — never self-enter)
+- [ ] only then: flip PLAN `current_phase` → 6 and cut the `phase-6-start`
+      branch/milestone
+
+### 7.2 task breakdown & file ownership (single dev; ownership = area of change)
+
+| # | Task | Files owned | Depends on |
+|---|------|-------------|------------|
+| T1 | `CodeValidator` interface + `RetrieveThenValidate` impl: given a code output + retrieved API/schema/examples, return verdict (pass/fail + reasons) — static/structural checks first (symbols, signatures, required imports), LLM judge only for semantic fits | `src/docpilot/validation/` (new: `validator.py`, `verdict.py`) | gate §7.1 |
+| T2 | `CodeGenerator`: retrieves docs (existing `Retriever`), builds a code-request prompt with the retrieved API/schema/examples inline, calls the existing `Generator` interface, attaches `CitationEngine` sources to every code block | `src/docpilot/codegen/` (new: `pipeline_ask_code.py`) | T1 |
+| T3 | Code route in the fast path only as an **explicit opt-in** (query intent or API surface; never the default answer path) — reuse the Phase 2 gate/strategy interfaces; a non-code question must fall back to the normal ask | `src/docpilot/agent/` (strategy dispatch), `config.py` | T2 |
+| T4 | Validation loop: unvalidated code is never returned — on `fail` the generator reformulates (reuse judge/max-turns pattern from Phase 2, capped) and re-validates; persistent fail → honest "couldn't validate — not returning code" with sources | `src/docpilot/validation/`, `src/docpilot/agent/` | T1–T3 |
+| T5 | Evaluation: extend Phase 4 `Evaluator`/dataset with code rows — gold: compiles/imports cleanly, symbol usage matches retrieved API, citations resolve to the right doc pages; reuses the harness (`run_pipeline` duck-typed runner, row checkpoints) | `src/docpilot/eval/` (dataset + metrics), `tests/test_eval_benchmark.py` | T2 |
+| T6 | API/UI surface (Phase 5 patterns): `POST /api/v1/code` streaming route + Chainlit "ask for code" control; debug panel already carries trace + sources — validation verdict is a new trace event | `src/docpilot/api/`, `src/docpilot/chainlit_app.py` | T4, T5 |
+| T7 | Validation-fixture corpus: small checked-in `.md`/`.py` pairings (retrieved API spec ↔ expected valid/invalid sample code) so T1/T4 are hermetic-testable without live LLM | `tests/fixtures/codegen/` | T1 |
+
+### 7.3 execution order (parallelizable steps collapse into the row)
+
+1. T7 fixtures + T1 interface + structural validator (hermetic, no LLM) with
+   tests — this is buildable first and de-risks everything else
+2. T2 code path (retrieve → prompt → generate → cite) behind the existing
+   `Generator`/`CitationEngine` interfaces
+3. T1→T2 wiring in a code-gated route (T3) — still no validation loop
+4. T4 validation loop + reformulation cap
+5. T5 eval rows + a small code-focused benchmark run (hermetic + live)
+6. T6 API/UI surface, reusing Phase 5 patterns untouched
+7. sweep: README/SPEC-consistent claims, CHANGELOG-able milestone, `phase-6`
+   tag when §7.5 is all `[x]`
+
+### 7.4 interfaces (reuse, don't rebuild)
+
+- reuse: `Retriever`, `Generator`, `Agent`/strategy dispatch, `CitationEngine`,
+  `Evaluator`, the benchmark harness (checkpointing + duck-typed runners from
+  the §6.5 hardening)
+- new: `CodeValidator` (see AGENTS.md interfaces list) — retrieval, generation,
+  and validation stay behind interfaces so the framework-extraction goal
+  (§8) is not prejudiced
+
+### 7.5 exit_criteria (checked when the phase closes — mirror §6.3 style)
+
+- [ ] `CodeValidator` returns pass/fail + reasons with no hallucinated
+      "fine" — structural checks are deterministic; LLM judge only for
+      semantic fit
+- [ ] code route is explicit and opt-in; non-code queries never produce a
+      code answer; the fast/cheap path is byte-identical for non-code asks
+- [ ] unvalidated code is never returned — persistent validation failure →
+      refusal-style "couldn't validate" with sources, never fabricated code
+- [ ] generated code carries citations resolving to real doc pages (existing
+      `CitationEngine` output, no new marker syntax)
+- [ ] Phase 4–5 suite + new T1/T2/T4/T5 tests green (the current 472 baseline
+      + additions)
+- [ ] a code-focused eval run exists in `src/docpilot/eval/reports/` with
+      validation-pass rate + citation accuracy; compared against the
+      non-code baseline where overlap exists
+- [ ] README/pitch honest: Phase 6 described only to the extent implemented
+      (SPEC §8: not a differentiator until it's built)
+
+### 7.6 non-scope / deferred (decide later, not now)
+
+- generalized multi-language codegen (start with the docs' own language —
+  Python/fastapi-flavored docs corpus); framework extraction (§8) stays
+  post-Phase-6
+- no change to how the §6.5 levers (`RERANK_ENABLED`, `AGENT_JUDGE_*`) behave;
+  Phase 6 does not paper over retrieval weaknesses — fix retrieval first
+  (AGENTS.md build-order rule 1)
 
 ## 8. framework_extraction
 - status: PLANNED (post-Phase 6)

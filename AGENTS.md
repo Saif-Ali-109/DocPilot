@@ -8,7 +8,23 @@ This is also the learning/validation project for a future reusable RAG framework
 
 - **SPEC.md is the source of truth** — the approved spec holds every locked decision for every phase.
 - **PLAN.md is the working state**, derived from SPEC.md — it holds the HOW: task breakdown, file ownership, execution order, and per-phase exit checklists.
-- When they disagree, **SPEC.md wins**; update PLAN.md to match.
+- **ACTIVE.md is the derived current view** — phase, live gates, contract constants, and the load-index table (which SPEC/PLAN lines to read). Never authoritative: if it contradicts SPEC/PLAN, fix ACTIVE.md.
+- When they disagree, **SPEC.md wins**; update PLAN.md (and ACTIVE.md) to match.
+
+## Context loading (read this first)
+
+- At every session start, read **`ACTIVE.md` in full** — it is the current
+  view (~110 lines) and the only file meant to be read whole.
+- **Never read whole `SPEC.md` or `PLAN.md`.** Use the load-index table in
+  `ACTIVE.md` §4: read only the cited line ranges — the **core + current-phase
+  bundle always**, everything else only when a task actually touches that
+  phase's code (PLAN §2–§5 are completed-phase history).
+- If a cited line range looks stale (files edited since ACTIVE.md was
+  refreshed), `grep -n` for the section heading, read only that section's
+  lines, then refresh the range in ACTIVE.md.
+- After any change to `SPEC.md` / `PLAN.md` / feature levers / current phase,
+  update `ACTIVE.md` (status + line ranges) **in the same commit** — never
+  land a SPEC/PLAN change without refreshing it.
 
 ## Build order
 
