@@ -40,6 +40,19 @@ logger = logging.getLogger(__name__)
 
 _VALID_STRATEGIES = frozenset({"auto", "direct", "agentic"})
 
+# Cache for the default judge instance so we don't rebuild a new
+# LLMSufficiencyJudge (and its underlying Groq HTTP client) on every agentic
+# call.  This is safe because:
+#   • The judge is stateless per call — ``_PARSE_FALLBACK_COUNTER`` is already
+#     module-level and unaffected by sharing.
+#   • The groq/httpx client is thread-safe; API concurrency can share it.
+#   • ``last_usage`` on the judge's generator is never read (only the per-request
+#     ANSWER generator's ``last_usage`` is read, in api/service.py).
+#   • CLI/eval paths are sequential anyway.
+# The cache is keyed on (model, floor) so that monkeypatched config values in
+# tests still get their own instance.
+_DEFAULT_JUDGE_CACHE: dict[tuple[str, float], LLMSufficiencyJudge] = {}
+
 
 def _build_default_judge() -> LLMSufficiencyJudge:
     """Build the production judge over a Groq-backed generator.
@@ -56,6 +69,21 @@ def _build_default_judge() -> LLMSufficiencyJudge:
     if config.AGENT_JUDGE_SCORE_FLOOR > 0.0:
         return ScoreFloorBackstopJudge(judge, config.AGENT_JUDGE_SCORE_FLOOR)
     return judge
+
+
+def _get_default_judge() -> LLMSufficiencyJudge:
+    """Return a cached default judge, building it only on the first call.
+
+    Keyed on ``(model, score_floor)`` so that tests monkeypatching config
+    attributes mid-process still get a correct instance without invalidating
+    the cache across unrelated calls.
+    """
+    model = config.AGENT_JUDGE_MODEL or config.GROQ_MODEL
+    floor = config.AGENT_JUDGE_SCORE_FLOOR
+    key = (model, floor)
+    if key not in _DEFAULT_JUDGE_CACHE:
+        _DEFAULT_JUDGE_CACHE[key] = _build_default_judge()
+    return _DEFAULT_JUDGE_CACHE[key]
 
 
 def _resolve_language(language: str | None) -> str:
@@ -193,7 +221,7 @@ def agentic_ask(
     if citation_engine is None:
         citation_engine = StandardCitationEngine()
     if judge is None:
-        judge = _build_default_judge()
+        judge = _get_default_judge()
     # Phase 3: default to the production GitHub tool only when a PAT exists;
     # otherwise keep tool=None so the loop is byte-identical to Phase 2 (the
     # judge is told tools are unavailable and no tool node exists).

@@ -472,3 +472,60 @@ def test_agentic_agent_accepts_tool_and_passes_it_through() -> None:
 
     assert "tool_call" in [t.step for t in res.trace]
     assert any(s.file.startswith("github:") for s in res.sources)
+
+
+# ---------------------------------------------------------------------------
+# (h) Default-judge caching: _build_default_judge called at most once
+# ---------------------------------------------------------------------------
+
+
+def test_default_judge_is_cached_across_calls(monkeypatch) -> None:
+    """Two agentic_ask calls with judge=None should build the judge only once.
+
+    The second call must reuse the cached instance from ``_get_default_judge``
+    rather than calling ``_build_default_judge`` again (WI-2).
+    """
+    from docpilot.agent.pipeline_agentic import _build_default_judge
+
+    build_count = 0
+
+    def _counting_build():
+        nonlocal build_count
+        build_count += 1
+        return StubJudge([Judgment(verdict="sufficient", reason="cached judge")])
+
+    monkeypatch.setattr(
+        "docpilot.agent.pipeline_agentic._build_default_judge",
+        _counting_build,
+    )
+    # Clear the cache so the first call actually exercises the builder path.
+    monkeypatch.setattr(
+        "docpilot.agent.pipeline_agentic._DEFAULT_JUDGE_CACHE",
+        {},
+    )
+
+    retriever = FakeRetriever(
+        {COMPLEX_Q: [make_result(content="chunk", score=0.9)]}
+    )
+    gen = FakeGenerator("Answer [1]")
+
+    agentic_ask(
+        COMPLEX_Q,
+        strategy="agentic",
+        retriever=retriever,
+        generator=gen,
+        citation_engine=StandardCitationEngine(),
+        judge=None,
+    )
+    agentic_ask(
+        COMPLEX_Q,
+        strategy="agentic",
+        retriever=retriever,
+        generator=gen,
+        citation_engine=StandardCitationEngine(),
+        judge=None,
+    )
+
+    assert build_count == 1, (
+        f"_build_default_judge was called {build_count} times; expected 1"
+    )
