@@ -1,3 +1,11 @@
+---
+title: DocPilot — Chainlit UI
+role: Phase 5 UI dev notes (Chainlit app)
+authority: none — informational
+load: on-demand — only when touching the Chainlit app
+last_updated: 2026-09-09
+---
+
 # DocPilot
 
 Evidence-driven agentic RAG for technical documentation.

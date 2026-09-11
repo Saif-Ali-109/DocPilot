@@ -1,3 +1,11 @@
+---
+title: DocPilot — Specification
+role: source of truth — locked decisions for every phase
+authority: highest — overrides PLAN and ACTIVE
+load: on-demand by section — line index in ACTIVE.md §4
+last_updated: 2026-09-11
+---
+
 # DocPilot — Specification
 
 **Version:** 0.1.0 (Phase 1)

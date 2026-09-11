@@ -1,3 +1,11 @@
+---
+title: DocPilot — README
+role: human-facing overview — keep claims honest, no contracts
+authority: none — informational
+load: not needed for agent sessions
+last_updated: 2026-09-11
+---
+
 # DocPilot
 
 An evidence-driven agentic RAG system for technical documentation.

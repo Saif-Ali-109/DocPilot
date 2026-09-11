@@ -1,3 +1,11 @@
+---
+title: DocPilot — ACTIVE current view
+role: derived current view — phase, gates, constants, load index
+authority: lowest — fix ACTIVE if it contradicts SPEC/PLAN
+load: read whole — the only file meant to be read whole
+last_updated: 2026-09-11
+---
+
 # ACTIVE — DocPilot current view (derived, never authoritative)
 
 > Every session: read this file in full first, then load ONLY the SPEC/PLAN
@@ -60,7 +68,7 @@
   agentic correctness 0.850 vs classic 0.817 (4 classic / 2 agentic / 3 ties);
   groundedness weak spot bd03/bd05/bd14/bd20, partial bd09/bd18, recall-miss
   bd17/bd18; reproducibility confirmed on the 15-row overlap. Truth: PLAN §6.5.3
-  (lines 978–1047) + its committed benchmark JSON.
+  (range in §4 load index) + its committed benchmark JSON.
 - Harness hardening (TPD clean-exit + row-level checkpoints in the eval
   harness) DONE — exit code 3 on daily-quota wall, resume skips checkpointed
   rows, full-set report preserved.
@@ -73,21 +81,21 @@ Core (always) + current-phase bundle; all other rows on demand.
 
 | File | Section | Lines | Load when |
 |---|---|---|---|
-| SPEC.md | §1 Project Overview | 9–23 | core — always |
-| SPEC.md | §2 Phased Build Order | 24–39 | core — always |
-| SPEC.md | §10 Architectural Rules | 747–755 | core — always |
-| SPEC.md | §11 Conflict Resolution | 756–761 | core — always |
-| SPEC.md | §6.1 Baseline metrics | 571–593 | gate/eval work |
-| SPEC.md | §6.5 Live-run protocol & quota | 657–699 | gate/eval work |
-| SPEC.md | §8 Phase 6 outline | 728–740 | Phase 6 planning |
-| PLAN.md | §1 meta | 3–26 | core — always |
-| PLAN.md | §6.5 pre-Phase-6 hardening evidence | 907–1047 | current-phase |
-| PLAN.md | §7 Phase 6 plan (gated) | 1048–1134 | current-phase |
-| PLAN.md | §9 architectural discipline | 1141–1163 | core — always |
-| PLAN.md | §10 conflict resolution | 1164–1174 | core — always |
-| PLAN.md | §11 git_workflow | 1175–1203 | core — always |
-| SPEC.md | §3–§5 locked phase details | 40–564 | on-demand: task touches that phase's code (classic RAG / agent / tooling) |
-| PLAN.md | §2–§5 completed-phase history | 27–905 | on-demand: same rule (incl. §5.3 eval slices, §6 API/UI) |
+| SPEC.md | §1 Project Overview | 17–31 | core — always |
+| SPEC.md | §2 Phased Build Order | 32–47 | core — always |
+| SPEC.md | §10 Architectural Rules | 755–763 | core — always |
+| SPEC.md | §11 Conflict Resolution | 764–769 | core — always |
+| SPEC.md | §6.1 Baseline metrics | 579–601 | gate/eval work |
+| SPEC.md | §6.5 Live-run protocol & quota | 665–707 | gate/eval work |
+| SPEC.md | §8 Phase 6 outline | 736–748 | Phase 6 planning |
+| PLAN.md | §1 meta | 11–34 | core — always |
+| PLAN.md | §6.5 pre-Phase-6 hardening evidence | 915–1055 | current-phase |
+| PLAN.md | §7 Phase 6 plan (gated) | 1056–1142 | current-phase |
+| PLAN.md | §9 architectural discipline | 1149–1171 | core — always |
+| PLAN.md | §10 conflict resolution | 1172–1182 | core — always |
+| PLAN.md | §11 git_workflow | 1183–1211 | core — always |
+| SPEC.md | §3–§5 locked phase details | 48–572 | on-demand: task touches that phase's code (classic RAG / agent / tooling) |
+| PLAN.md | §2–§5 completed-phase history | 35–913 | on-demand: same rule (incl. §5.3 eval slices, §6 API/UI) |
 
 On-demand rule: load a completed-phase section ONLY if the task changes that
 phase's code. If a cited range looks stale, `grep -n '^## '` the file for the

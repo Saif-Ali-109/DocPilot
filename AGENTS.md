@@ -14,7 +14,7 @@ This is also the learning/validation project for a future reusable RAG framework
 ## Context loading (read this first)
 
 - At every session start, read **`ACTIVE.md` in full** — it is the current
-  view (~110 lines) and the only file meant to be read whole.
+  view (~120 lines) and the only file meant to be read whole.
 - **Never read whole `SPEC.md` or `PLAN.md`.** Use the load-index table in
   `ACTIVE.md` §4: read only the cited line ranges — the **core + current-phase
   bundle always**, everything else only when a task actually touches that

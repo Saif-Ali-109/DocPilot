@@ -1,3 +1,11 @@
+---
+title: DocPilot — dependency ledger
+role: coordinator-owned dependency requests (PLAN §2.3)
+authority: none — ledger
+load: on-demand — when changing dependencies
+last_updated: 2026-09-06
+---
+
 # deps.md — dependency requests (coordinator-owned)
 
 Per PLAN.md §2.3, agents declare `deps_needed` here and AGENT A installs them.

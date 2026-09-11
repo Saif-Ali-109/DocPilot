@@ -1,3 +1,11 @@
+---
+title: DocPilot — Execution Plan (working state)
+role: HOW — tasks, file ownership, execution order, exit checklists
+authority: derived from SPEC — above ACTIVE
+load: on-demand by section — line index in ACTIVE.md §4
+last_updated: 2026-09-11
+---
+
 # DocPilot — Execution Plan
 
 ## 1. meta
