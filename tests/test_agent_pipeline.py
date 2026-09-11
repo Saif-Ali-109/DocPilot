@@ -529,3 +529,67 @@ def test_default_judge_is_cached_across_calls(monkeypatch) -> None:
     assert build_count == 1, (
         f"_build_default_judge was called {build_count} times; expected 1"
     )
+
+
+# ---------------------------------------------------------------------------
+# (i) Compiled-graph memoization: build_graph called at most once
+# ---------------------------------------------------------------------------
+
+
+def test_compiled_graph_is_reused_across_calls(monkeypatch) -> None:
+    """Two agentic_ask calls with the same injected components compile once.
+
+    The second call must reuse the cached compiled app from
+    ``_get_compiled_graph`` rather than calling ``build_graph`` again (WI-3).
+    """
+    from collections import OrderedDict
+
+    from docpilot.agent.graph import build_graph as real_build_graph
+
+    build_count = 0
+
+    def _counting_build(**kwargs):
+        nonlocal build_count
+        build_count += 1
+        return real_build_graph(**kwargs)
+
+    monkeypatch.setattr(
+        "docpilot.agent.pipeline_agentic.build_graph",
+        _counting_build,
+    )
+    # Clear the cache so the first call actually exercises the builder path.
+    monkeypatch.setattr(
+        "docpilot.agent.pipeline_agentic._COMPILED_GRAPH_CACHE",
+        OrderedDict(),
+    )
+    # Keep the tool out of the loop (all-defaults tool creation would give a
+    # fresh GitHubTool per call — different id → correctly different key).
+    monkeypatch.setattr(config, "GITHUB_PAT", "")
+
+    retriever, judge, gen = _agentic_fakes()
+    citation_engine = StandardCitationEngine()  # single instance, reused
+
+    res1 = agentic_ask(
+        COMPLEX_Q,
+        strategy="agentic",
+        retriever=retriever,
+        judge=judge,
+        generator=gen,
+        citation_engine=citation_engine,
+    )
+    res2 = agentic_ask(
+        COMPLEX_Q,
+        strategy="agentic",
+        retriever=retriever,
+        judge=judge,
+        generator=gen,
+        citation_engine=citation_engine,
+    )
+
+    assert build_count == 1, (
+        f"build_graph was called {build_count} times; expected 1"
+    )
+    # Behavioural parity: the reused graph answers identically.
+    assert res1.refused is False and res2.refused is False
+    assert res1.answer == res2.answer
+    assert res1.sources == res2.sources

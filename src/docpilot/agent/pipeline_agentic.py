@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import OrderedDict
 
 from docpilot import config
 from docpilot.agent.gate import HeuristicQueryClassifier
@@ -84,6 +85,105 @@ def _get_default_judge() -> LLMSufficiencyJudge:
     if key not in _DEFAULT_JUDGE_CACHE:
         _DEFAULT_JUDGE_CACHE[key] = _build_default_judge()
     return _DEFAULT_JUDGE_CACHE[key]
+
+
+# ---------------------------------------------------------------------------
+# Compiled-graph cache (WI-3)
+# ---------------------------------------------------------------------------
+# build_graph() + .compile() takes ~14 ms — trivial per call but wasteful when
+# the same injected component instances are reused across calls (long-lived
+# AgenticAgent instances with explicit components; test suites reusing fakes).
+#
+# Safety rationale:
+#   • Cache holds strong refs via the compiled app → cached components stay
+#     alive → Python cannot reuse their id() while the entry lives → no
+#     stale-id collision.
+#   • The tool instance is bound into the tool_call_node and judge closures,
+#     so its identity is part of the key alongside the boolean presence flag.
+#   • Scalars (top_k, language, max_retries, judge_skip_score) are in the key
+#     because they are bound into closures/edges.
+#   • emit is None only — per-request emit/generator (API path) must compile
+#     fresh.
+#   • All-defaults path is excluded (cacheable=False) because the default
+#     retriever's DB connection is closed after each invoke (WI-8 will add
+#     connection pooling to enable caching there).
+#   • Concurrent misses may build twice — both graphs are equivalent and
+#     invoke is per-call state; harmless.
+_COMPILED_GRAPH_CACHE_MAX = 8
+_COMPILED_GRAPH_CACHE: OrderedDict[tuple, object] = OrderedDict()
+
+
+def _get_compiled_graph(
+    *,
+    retriever,
+    judge,
+    generator,
+    citation_engine,
+    top_k,
+    language,
+    max_retries,
+    tool,
+    emit,
+    judge_skip_score,
+    cacheable: bool,
+) -> object:
+    """Return a compiled LangGraph app, reusing a cached copy when possible.
+
+    The cache is keyed on the full set of inputs that affect graph structure
+    and node behaviour.  ``cacheable=False`` (all-defaults path with a
+    per-call DB connection) or ``emit is not None`` (per-request streaming
+    callback) always builds fresh.
+
+    Bounded to ``_COMPILED_GRAPH_CACHE_MAX`` entries; oldest entry evicted
+    on overflow via ``OrderedDict.popitem``.
+    """
+    if not cacheable or emit is not None:
+        return build_graph(
+            retriever=retriever,
+            judge=judge,
+            generator=generator,
+            citation_engine=citation_engine,
+            top_k=top_k,
+            language=language,
+            max_retries=max_retries,
+            tool=tool,
+            emit=emit,
+            judge_skip_score=judge_skip_score,
+        )
+
+    key = (
+        tool is not None,
+        id(tool) if tool is not None else None,
+        top_k,
+        language,
+        max_retries,
+        judge_skip_score,
+        id(retriever),
+        id(judge),
+        id(generator),
+        id(citation_engine),
+    )
+
+    if key in _COMPILED_GRAPH_CACHE:
+        _COMPILED_GRAPH_CACHE.move_to_end(key)
+        return _COMPILED_GRAPH_CACHE[key]
+
+    app = build_graph(
+        retriever=retriever,
+        judge=judge,
+        generator=generator,
+        citation_engine=citation_engine,
+        top_k=top_k,
+        language=language,
+        max_retries=max_retries,
+        tool=tool,
+        emit=emit,
+        judge_skip_score=judge_skip_score,
+    )
+    if len(_COMPILED_GRAPH_CACHE) >= _COMPILED_GRAPH_CACHE_MAX:
+        _COMPILED_GRAPH_CACHE.popitem(last=False)
+    _COMPILED_GRAPH_CACHE[key] = app
+    return app
 
 
 def _resolve_language(language: str | None) -> str:
@@ -211,6 +311,14 @@ def agentic_ask(
         )
 
     # ── agentic path: run the compiled graph ─────────────────────────────
+    # Cacheable only when the caller injected components whose lifecycle they
+    # own (id-based cache key) AND there is no per-request emit hook. The
+    # all-defaults path builds a per-call retriever + DB connection that is
+    # closed after invoke — caching it would reuse a closed connection, so it
+    # must compile fresh every time.
+    cacheable = emit is None and any(
+        x is not None for x in (retriever, judge, generator, citation_engine)
+    )
     conn = None
     if retriever is None:
         from docpilot.pipeline_ask import _build_default_retriever
@@ -228,7 +336,7 @@ def agentic_ask(
     if tool is None and config.GITHUB_PAT:
         tool = GitHubTool()
 
-    app = build_graph(
+    app = _get_compiled_graph(
         retriever=retriever,
         judge=judge,
         generator=generator,
@@ -239,6 +347,7 @@ def agentic_ask(
         tool=tool,
         emit=emit,
         judge_skip_score=config.AGENT_JUDGE_SKIP_MIN_SCORE,
+        cacheable=cacheable,
     )
     initial: AgentLoopState = {
         "question": question,
