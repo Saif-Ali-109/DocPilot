@@ -1092,7 +1092,10 @@ flips pending.
 - progress (per §7.3 order): **T7 + T1 DONE 2026-09-12** — `CodeValidator`
   interface + `RetrieveThenValidate` (parse → imports grounded → symbols
   grounded, fully hermetic) + fixture corpus (`tests/fixtures/codegen`) + 16
-  tests; next: T2 codegen path behind `Generator`/`CitationEngine`.
+  tests; **T2 DONE 2026-09-12** — `ask_code` code pipeline
+  (`src/docpilot/codegen/`, `CodeRequest`, `CODE_PROMPT`) behind
+  `Retriever`/`Generator`/`CitationEngine`, no validation loop yet; next:
+  T3 opt-in route wiring + T4 validation loop.
 - summary (SPEC §8, verbatim scope): >
     Documentation retrieval → generate code → validate against retrieved
     API/schema/examples → return code + sources. Only after the core is

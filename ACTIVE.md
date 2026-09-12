@@ -35,7 +35,8 @@ last_updated: 2026-09-11
 - **Decision: `HYBRID_ENABLED` stays OFF** — no net answer-level win; same
   verdict shape as RERANK (retrieval gain ≠ answer-level gain).
 - Phase 6 ACTIVE (sign-off 2026-09-12): building per PLAN §7.3 — **T7 + T1
-  DONE** (hermetic `CodeValidator` + fixture corpus + 16 tests); next: T2 codegen.
+  DONE** (hermetic `CodeValidator` + fixture corpus + 16 tests); **T2 DONE**
+  (`ask_code` codegen pipeline, 6 tests); next: T3 opt-in route wiring.
 
 ## 2. Contract constants
 
@@ -76,7 +77,8 @@ last_updated: 2026-09-11
 - Hybrid gate DONE 2026-09-12 — verdict `HYBRID_ENABLED` stays OFF (evidence
   in §1 + PLAN §6.5); reports committed (stamp `20260912_080743`).
 - Phase 6 ACTIVE (sign-off 2026-09-12): T7 + T1 DONE (`CodeValidator`
-  hermetic, 16 tests); next T2 codegen path (PLAN §7.3). Levers stay OFF
+  hermetic, 16 tests); T2 DONE (`ask_code` codegen pipeline, 6 tests); next
+  T3 opt-in route + T4 validation loop (PLAN §7.3). Levers stay OFF
   (gate verdict).
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF), Phase 6
   signed off. No other open gates; levers stay OFF permanently on this corpus.
