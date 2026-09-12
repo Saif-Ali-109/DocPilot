@@ -9,6 +9,13 @@ just the bare answer when there is no footer. On empty retrieval the pipeline
 still calls the generator with a placeholder context indicating that nothing
 was found; the LLM is expected to refuse (the "I don't know" path) and the
 pipeline must never crash.
+
+The retrieve → context+sources → generate → cite core is shared with the
+streaming API fast path (:func:`docpilot.api.service._run_direct`) via
+:func:`docpilot.core.direct._run_direct_core`; this module keeps only the
+non-streaming Phase-1 behaviour, its own observability logging, and the
+``AskResult`` summary. :data:`_NO_CONTEXT_NOTE` is defined in the shared core
+and re-exported here so the agent graph's import location stays unchanged.
 """
 
 from __future__ import annotations
@@ -19,17 +26,10 @@ from dataclasses import dataclass, field
 
 from docpilot import config
 from docpilot.citations.engine import StandardCitationEngine
-from docpilot.core.models import (
-    RetrieverResult,
-    SourceRef,
-    derive_source_kind,
-)
-from docpilot.generation.prompts import SYSTEM_PROMPT, format_sources
+from docpilot.core.direct import _NO_CONTEXT_NOTE, _run_direct_core
+from docpilot.core.models import RetrieverResult, SourceRef
 
 logger = logging.getLogger(__name__)
-
-# Placeholder context shown to the LLM when retrieval returned nothing.
-_NO_CONTEXT_NOTE = "[no context retrieved — the documentation may not cover this question.]"
 
 
 @dataclass
@@ -191,60 +191,41 @@ def ask(
             dim if dim is not None else "unknown (retriever does not expose one)",
         )
 
-        # ── retrieve ───────────────────────────────────────────────────────
-        results = retriever.retrieve(question, top_k=top_k, language=filter_language)
-        for i, r in enumerate(results):
-            logger.debug(
-                "Retrieved chunk %d: id=%s score=%.4f file=%s heading=%s",
-                i + 1,
-                r.chunk.id,
-                r.score,
-                r.chunk.source_file,
-                r.chunk.heading_path or "None",
-            )
-        logger.info("Retrieved %d result(s)", len(results))
+        def _on_search(results, search_started) -> None:
+            """Log retrieval detail right after retrieval (debug observability)."""
+            del search_started  # ask() does not timestamp per-step events.
+            for i, r in enumerate(results):
+                logger.debug(
+                    "Retrieved chunk %d: id=%s score=%.4f file=%s heading=%s",
+                    i + 1,
+                    r.chunk.id,
+                    r.score,
+                    r.chunk.source_file,
+                    r.chunk.heading_path or "None",
+                )
+            logger.info("Retrieved %d result(s)", len(results))
+            if not results:
+                logger.warning(
+                    "No context retrieved — the documentation may not cover this question."
+                )
 
-        # ── build context + sources (SPEC.md §3.9) ─────────────────────────
-        if results:
-            context_text = "\n\n".join(
-                f"[{i + 1}] {r.chunk.content}" for i, r in enumerate(results)
-            )
-        else:
-            context_text = _NO_CONTEXT_NOTE
-            logger.warning(
-                "No context retrieved — the documentation may not cover this question."
-            )
-
-        sources = [
-            SourceRef(
-                ref=i + 1,
-                file=r.chunk.source_file,
-                heading=r.chunk.heading_path or None,
-                kind=derive_source_kind(r.chunk.source_file),
-            )
-            for i, r in enumerate(results)
-        ]
-        sources_text = format_sources(sources)
-
-        # ── generate ───────────────────────────────────────────────────────
-        # The exact prompt is reconstructed here (identical to what the real
-        # GroqGenerator builds via generate_answer) so it can be logged/kept
-        # in AskResult without leaking secrets — the prompt contains only
-        # retrieved documentation text.
-        full_prompt = SYSTEM_PROMPT.format(
-            context=context_text,
-            sources=sources_text,
-            question=question,
+        # Shared core: retrieve → context+sources → generate → cite.  No
+        # streaming hook → the single generate_answer call (never streams).
+        core = _run_direct_core(
+            question,
+            retriever=retriever,
+            generator=generator,
+            citation_engine=citation_engine,
+            top_k=top_k,
+            filter_language=filter_language,
+            on_search=_on_search,
         )
-        raw_response = generator.generate_answer(context_text, sources_text, question)
-        logger.debug("Full prompt sent to LLM:\n%s", full_prompt)
-        logger.debug("Raw LLM response:\n%s", raw_response)
-
-        # ── cite ───────────────────────────────────────────────────────────
-        answer, footer = citation_engine.format_answer(raw_response, sources)
     finally:
         if conn is not None:
             conn.close()
+
+    logger.debug("Full prompt sent to LLM:\n%s", core.raw_prompt)
+    logger.debug("Raw LLM response:\n%s", core.raw_response)
 
     latency_ms = (time.perf_counter() - started) * 1000.0
     logger.info("Answer generated in %.1f ms total (retrieval + generation).", latency_ms)
@@ -252,11 +233,11 @@ def ask(
 
     return AskResult(
         question=question,
-        answer=answer,
-        footer=footer,
-        sources=sources,
-        results=results,
-        raw_prompt=full_prompt,
-        raw_response=raw_response,
+        answer=core.answer,
+        footer=core.footer,
+        sources=core.sources,
+        results=core.results,
+        raw_prompt=core.raw_prompt,
+        raw_response=core.raw_response,
         latency_ms=latency_ms,
     )

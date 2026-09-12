@@ -15,8 +15,10 @@ Routing mirrors :func:`docpilot.agent.pipeline_agentic.agentic_ask` exactly:
 ``auto`` lets the heuristic gate decide, ``direct`` / ``agentic`` force a
 path.  On the agentic path the gate (and every node) step event is emitted by
 ``agentic_ask`` itself; on the direct path this module emits the gate step,
-the retrieval debug payload, streamed answer tokens, and the final answer —
-mirroring ``pipeline_ask.ask``'s SPEC §3.9 construction so output is
+the retrieval debug payload, streamed answer tokens, and the final answer.
+The retrieve → context+sources → generate → cite work is delegated to the
+shared direct core (:func:`docpilot.core.direct._run_direct_core`), the same
+code the CLI pipeline (:func:`docpilot.pipeline_ask.ask`) runs, so output is
 byte-identical to the CLI's direct path.
 
 Every run ends with a terminal event (``answer`` then ``done``, or ``error``);
@@ -37,8 +39,8 @@ from docpilot.agent.pipeline_agentic import agentic_ask
 from docpilot.agent.prompts import REFUSE_ANSWER
 from docpilot.agent.types import LoopTraceStep
 from docpilot.citations.engine import StandardCitationEngine
+from docpilot.core.direct import _run_direct_core
 from docpilot.core.models import SourceRef, derive_source_kind
-from docpilot.generation.prompts import format_sources
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +217,11 @@ def _run_direct(
 ) -> dict:
     """Fast path with live streaming — mirrors ``pipeline_ask.ask`` (SPEC §3.9)
     but yields answer tokens to ``emit`` as they arrive, then emits the
-    formatted answer, the trace and the done summary."""
+    formatted answer, the trace and the done summary.  The retrieve →
+    context+sources → generate → cite core is shared with the CLI pipeline
+    (:func:`docpilot.core.direct._run_direct_core`); this wrapper keeps the
+    connection lifecycle, the gate trace step, and the search / answer trace
+    steps, driving the search and token events through the core's hooks."""
     started = time.perf_counter()
 
     gate_started = time.perf_counter()
@@ -249,10 +255,10 @@ def _run_direct(
     search_step: LoopTraceStep | None = None
     answer_step: LoopTraceStep | None = None
 
-    try:
-        # ── retrieve ──────────────────────────────────────────────────────
-        search_started = time.perf_counter()
-        results = retriever.retrieve(question, top_k=top_k, language=filter_language)
+    def _on_search(results, search_started) -> None:
+        """Emit the debug-panel payload + ``search`` trace step right after
+        retrieval, before any token is generated (SPEC §7 event order)."""
+        nonlocal search_step
         logger.info("Direct path retrieved %d result(s)", len(results))
         emit(_search_payload(1, question, results, search_started))
         top_scores = [round(r.score, 4) for r in results[:3]]
@@ -266,58 +272,27 @@ def _run_direct(
             started_at=search_started,
         )
         emit({"type": "step", "step": trace_step_to_dict(search_step)})
-
-        # ── context + sources (SPEC §3.9, mirrors pipeline_ask.ask) ───────
-        if results:
-            context_text = "\n\n".join(
-                f"[{i + 1}] {r.chunk.content}" for i, r in enumerate(results)
-            )
-        else:
-            from docpilot.pipeline_ask import _NO_CONTEXT_NOTE
-
-            context_text = _NO_CONTEXT_NOTE
+        if not results:
             logger.warning(
                 "No context retrieved — the documentation may not cover this question."
             )
 
-        sources = [
-            SourceRef(
-                ref=i + 1,
-                file=r.chunk.source_file,
-                heading=r.chunk.heading_path or None,
-                kind=derive_source_kind(r.chunk.source_file),
-            )
-            for i, r in enumerate(results)
-        ]
-        sources_text = format_sources(sources)
-
-        # ── generate (streamed when supported) ────────────────────────────
-        answer_started = time.perf_counter()
-        streamed: list[str] = []
-        stream_ok = False
-        try:
-            for delta in generator.generate_answer_stream(
-                context_text, sources_text, question
-            ):
-                streamed.append(delta)
-                emit({"type": "token", "delta": delta})
-            stream_ok = True
-        except NotImplementedError:
-            stream_ok = False
-
-        if stream_ok and streamed and "".join(streamed).strip():
-            raw_response = "".join(streamed)
-        else:
-            # Streaming unsupported or produced nothing usable — single call.
-            raw_response = generator.generate_answer(context_text, sources_text, question)
-            emit({"type": "token", "delta": raw_response})
-
-        # ── cite ──────────────────────────────────────────────────────────
-        answer, footer = citation_engine.format_answer(raw_response, sources)
-        display = f"{answer}\n\n{footer}" if footer else answer
-        refused = REFUSE_ANSWER in raw_response  # mirrors eval benchmark §3.9
+    try:
+        # Shared core: retrieve → context+sources → generate → cite.  Its
+        # streaming hook forwards answer tokens; its search hook carries the
+        # debug payload and search trace step (see above).
+        core = _run_direct_core(
+            question,
+            retriever=retriever,
+            generator=generator,
+            citation_engine=citation_engine,
+            top_k=top_k,
+            filter_language=filter_language,
+            on_search=_on_search,
+            on_generate_delta=lambda delta: emit({"type": "token", "delta": delta}),
+        )
         answer_step = LoopTraceStep.new(
-            "answer", question, "answer", started_at=answer_started
+            "answer", question, "answer", started_at=core.answer_started
         )
         emit({"type": "step", "step": trace_step_to_dict(answer_step)})
     finally:
@@ -325,14 +300,15 @@ def _run_direct(
             conn.close()
 
     latency_ms = (time.perf_counter() - started) * 1000.0
-    sources_out = _sources_out(sources)
+    sources_out = _sources_out(core.sources)
     trace = [
         trace_step_to_dict(s) for s in (gate_step, search_step, answer_step) if s is not None
     ]
+    refused = REFUSE_ANSWER in core.raw_response  # mirrors eval benchmark §3.9
     emit(
         {
             "type": "answer",
-            "text": display,
+            "text": core.display,
             "sources": sources_out,
             "refused": refused,
             "direct": True,
@@ -342,7 +318,7 @@ def _run_direct(
     emit({"type": "done", "trace": trace, "latency_ms": round(latency_ms, 1), "usage": usage})
     return {
         "question": question,
-        "answer": display,
+        "answer": core.display,
         "sources": sources_out,
         "refused": refused,
         "direct": True,
