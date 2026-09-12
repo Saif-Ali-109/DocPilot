@@ -242,6 +242,13 @@ def _run_direct(
     resolved_language = language if language is not None else config.RETRIEVAL_LANGUAGE
     filter_language = None if resolved_language == "any" else resolved_language
 
+    # Pre-initialise so the post-finally trace construction never hits
+    # UnboundLocalError if a mid-pipeline exception causes fall-through
+    # (currently guarded by the bare `raise`, but future `except` clauses
+    # could change this).
+    search_step: LoopTraceStep | None = None
+    answer_step: LoopTraceStep | None = None
+
     try:
         # ── retrieve ──────────────────────────────────────────────────────
         search_started = time.perf_counter()
@@ -320,9 +327,7 @@ def _run_direct(
     latency_ms = (time.perf_counter() - started) * 1000.0
     sources_out = _sources_out(sources)
     trace = [
-        trace_step_to_dict(gate_step),
-        trace_step_to_dict(search_step),
-        trace_step_to_dict(answer_step),
+        trace_step_to_dict(s) for s in (gate_step, search_step, answer_step) if s is not None
     ]
     emit(
         {

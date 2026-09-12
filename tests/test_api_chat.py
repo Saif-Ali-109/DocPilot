@@ -178,6 +178,26 @@ class TestDirectPathEvents:
         with pytest.raises(ValueError):
             ask_events("hi", strategy="bogus", retriever=FakeRetriever({}), generator=PlainFakeGenerator(), emit=lambda d: None)
 
+    def test_retriever_failure_propagates_as_original_exception(self) -> None:
+        """A mid-pipeline retrieval failure must propagate to the caller as
+        the original exception — never an UnboundLocalError from the
+        post-finally trace construction.  The app layer maps this to an SSE
+        ``error`` event (see TestChatSSE.test_engine_failure_emits_error_event)."""
+
+        class BoomRetriever:
+            def retrieve(self, query, top_k=5, *, language=None):
+                raise RuntimeError("vector store unreachable")
+
+        with pytest.raises(RuntimeError, match="vector store unreachable"):
+            ask_events(
+                SIMPLE_QUESTION,
+                strategy="direct",
+                retriever=BoomRetriever(),
+                generator=StreamingFakeGenerator(),
+                citation_engine=StandardCitationEngine(),
+                emit=lambda d: None,
+            )
+
 
 class TestDirectPathRouting:
     def test_simple_question_stays_on_direct_path(self) -> None:
@@ -408,6 +428,28 @@ class TestChatSSE:
         client, _ = _client(tmp_path)
         resp = client.post("/api/v1/chat", json={"question": "hi", "strategy": "bogus"})
         assert resp.status_code == 422
+
+    def test_engine_failure_emits_error_event(self, tmp_path) -> None:
+        """A mid-pipeline failure (e.g. retriever.retrieve raising) must not
+        leak as a raw exception: ``_chat_stream.worker`` maps it to an SSE
+        ``error`` event and the stream ends cleanly (SPEC §7 terminal-event
+        contract)."""
+        store = SessionStore(db_path=str(tmp_path / "sessions.sqlite3"))
+
+        def failing_engine(question: str, *, strategy=None, top_k=None, language=None,
+                           model=None, emit=None) -> dict:
+            del strategy, top_k, language, model, emit
+            raise RuntimeError("vector store unreachable")
+
+        app = create_app(store=store, engine=failing_engine)
+        client = TestClient(app)
+        with client.stream("POST", "/api/v1/chat", json={"question": "hello"}) as resp:
+            assert resp.status_code == 200
+            blocks = [b for b in resp.iter_lines() if b]
+            parsed = [parse_sse_block(b) for b in blocks if parse_sse_block(b)]
+            assert [p["type"] for p in parsed] == ["error"]
+            assert "RuntimeError" in parsed[0]["message"]
+            assert "vector store unreachable" in parsed[0]["message"]
 
 
 class TestSessionsAPI:
