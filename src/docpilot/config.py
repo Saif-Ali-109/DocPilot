@@ -184,6 +184,16 @@ only an explicit per-request opt-in (``explicit_code=True``) can take it.
 queries always fall back to the standard answer path, byte-identical to the
 levers-off baseline (§7.5)."""
 
+CODE_VALIDATE_MAX_TURNS: int = int(os.getenv("CODE_VALIDATE_MAX_TURNS", "2"))
+"""Maximum validation/reformulation iterations on the code route (PLAN §7.2 T4).
+
+The T4 loop generates code, validates it with the T1 ``CodeValidator`` and,
+on a failed verdict, feeds the failure reasons back for one rewrite per turn.
+After ``CODE_VALIDATE_MAX_TURNS`` rewrites (so 1 initial + N fixes) a still
+failing output is **not returned** — the route answers with a "couldn't
+validate" refusal plus the retrieved sources (§7.5: unvalidated code is never
+returned)."""
+
 CODE_INTENT_PHRASES: tuple[str, ...] = (
     "write code", "write a function", "write a class", "write an example",
     "generate code", "generate a function", "generate an example",

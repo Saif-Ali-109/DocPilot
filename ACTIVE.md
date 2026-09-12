@@ -37,8 +37,9 @@ last_updated: 2026-09-11
 - Phase 6 ACTIVE (sign-off 2026-09-12): building per PLAN §7.3 — **T7 + T1
   DONE** (hermetic `CodeValidator` + fixture corpus + 16 tests); **T2 DONE**
   (`ask_code` codegen pipeline, 6 tests); **T3 DONE** (opt-in code dispatch
-  `agent/code_route.py` + T1→T2 verdict wiring, 14 tests); next: T4
-  validation loop + cap.
+  `agent/code_route.py` + T1→T2 verdict wiring, 14 tests); **T4 DONE**
+  (validation loop + cap, `CODE_VALIDATE_MAX_TURNS`, refusal-with-sources on
+  persistent failure, 5 tests); next: T5 code eval rows + T6 API/UI.
 
 ## 2. Contract constants
 
@@ -80,8 +81,9 @@ last_updated: 2026-09-11
   in §1 + PLAN §6.5); reports committed (stamp `20260912_080743`).
 - Phase 6 ACTIVE (sign-off 2026-09-12): T7 + T1 DONE (`CodeValidator`
   hermetic, 16 tests); T2 DONE (`ask_code` codegen pipeline, 6 tests); T3
-  DONE (opt-in code dispatch + verdict wiring, 14 tests); next T4 validation
-  loop + cap (PLAN §7.3). Levers stay OFF (gate verdict).
+  DONE (opt-in code dispatch + verdict wiring, 14 tests); T4 DONE
+  (validation loop + cap + refusal-with-sources, 5 tests); next T5 code eval
+  rows + T6 API/UI (PLAN §7.3). Levers stay OFF (gate verdict).
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF), Phase 6
   signed off. No other open gates; levers stay OFF permanently on this corpus.
 

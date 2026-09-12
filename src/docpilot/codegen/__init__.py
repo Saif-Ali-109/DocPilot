@@ -7,7 +7,17 @@ sources. Validation wiring (T3/T4) lives in the agent/route layers — this
 capability stays a clean, injectable pipeline.
 """
 
-from docpilot.codegen.pipeline_ask_code import CodeRequest, ask_code
-from docpilot.codegen.prompts import CODE_PROMPT
+from docpilot.codegen.pipeline_ask_code import (
+    VALIDATION_REFUSAL,
+    CodeRequest,
+    ask_code,
+)
+from docpilot.codegen.prompts import CODE_FIX_PROMPT, CODE_PROMPT
 
-__all__ = ["CodeRequest", "ask_code", "CODE_PROMPT"]
+__all__ = [
+    "CodeRequest",
+    "ask_code",
+    "CODE_PROMPT",
+    "CODE_FIX_PROMPT",
+    "VALIDATION_REFUSAL",
+]

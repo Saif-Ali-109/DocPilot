@@ -17,11 +17,12 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from docpilot import config
 from docpilot.citations.engine import StandardCitationEngine
-from docpilot.codegen.prompts import CODE_PROMPT
+from docpilot.codegen.prompts import CODE_FIX_PROMPT, CODE_PROMPT
 from docpilot.core.direct import _NO_CONTEXT_NOTE
 from docpilot.core.models import (
     RetrieverResult,
@@ -39,6 +40,16 @@ logger = logging.getLogger(__name__)
 # the request, and emits no code.
 _REFUSAL_SENTENCE = (
     "I don't know — the available documentation does not cover this question."
+)
+
+# PLAN §7.5: persistent validation failure is answered with a refusal-style
+# message (distinct from the §3.9 coverage refusal — this one means "the code
+# could not be validated against the docs"), always accompanied by the
+# retrieved sources.  The failed candidate stays attached to the CodeRequest
+# for inspection (demo/debugging project), but it is never the returned answer.
+VALIDATION_REFUSAL = (
+    "I couldn't validate the generated code against the retrieved "
+    "documentation, so I'm not returning code."
 )
 
 
@@ -70,6 +81,11 @@ class CodeRequest:
         block_verdicts: One :class:`ValidationVerdict` per emitted code block
             (T3 wiring — verdicts are attached in order; length matches
             ``code_blocks`` whenever a validator ran).
+        validation_failed: ``True`` when the T4 loop exhausted its
+            reformulation budget and refused (:meth:`refuse_code`) — the
+            answer is then the refusal message, never the failed code.
+        validation_reasons: Union of the failure reasons across all block
+            verdicts (what the T4 loop fed back for reformulation).
     """
 
     question: str
@@ -84,6 +100,8 @@ class CodeRequest:
     refused: bool = False
     verdict: ValidationVerdict | None = None
     block_verdicts: list[ValidationVerdict] = field(default_factory=list)
+    validation_failed: bool = False
+    validation_reasons: list[str] = field(default_factory=list)
 
     @property
     def display(self) -> str:
@@ -97,6 +115,22 @@ class CodeRequest:
         """True when the pipeline produced at least one fenced code block."""
         return bool(self.code_blocks)
 
+    def refuse_code(self, message: str = VALIDATION_REFUSAL) -> None:
+        """Mark the request as validation-refused (PLAN §7.5).
+
+        Replaces the returned answer with *message* and keeps the retrieved
+        sources visible as the footer, so the user sees *why* nothing was
+        returned and *where* the evidence came from.  The failed candidate
+        remains attached (``code_blocks`` / ``raw_response``) for the debug
+        layer — it is just never the displayed answer.
+        """
+        self.validation_failed = True
+        self.answer = message
+        if self.sources:
+            self.footer = "Sources:\n" + format_sources(self.sources)
+        else:
+            self.footer = ""
+
 
 def ask_code(
     question: str,
@@ -107,6 +141,7 @@ def ask_code(
     top_k: int | None = None,
     language: str | None = None,
     prompt_template: str = CODE_PROMPT,
+    fix_reasons: Sequence[str] = (),
 ) -> CodeRequest:
     """Retrieve docs for *question*, generate code grounded in them, cite it.
 
@@ -125,6 +160,10 @@ def ask_code(
         prompt_template: Prompt template with ``{context}``, ``{sources}``
             and ``{question}`` placeholders (default ``CODE_PROMPT``).
             Injectable so tests and future prompts are trivial to swap.
+        fix_reasons: Validation-failure reasons from a previous attempt
+            (T4 loop).  When non-empty the request is built from
+            ``CODE_FIX_PROMPT`` with those reasons inline — a reformulation,
+            not a fresh answer.
 
     Returns:
         A :class:`CodeRequest` carrying the raw/cited output, extracted code
@@ -185,12 +224,22 @@ def ask_code(
         sources_text = format_sources(sources)
 
         # Generate code via the shared Generator interface (single system
-        # prompt, same as generate_answer — no new call machinery).
-        full_prompt = prompt_template.format(
-            context=context_text,
-            sources=sources_text,
-            question=question,
-        )
+        # prompt, same as generate_answer — no new call machinery).  A
+        # non-empty *fix_reasons* switches to the reformulation template so
+        # the model repairs the previous attempt instead of starting fresh.
+        if fix_reasons:
+            full_prompt = CODE_FIX_PROMPT.format(
+                context=context_text,
+                sources=sources_text,
+                question=question,
+                reasons="\n".join(f"- {reason}" for reason in fix_reasons),
+            )
+        else:
+            full_prompt = prompt_template.format(
+                context=context_text,
+                sources=sources_text,
+                question=question,
+            )
         raw_response = generator.generate(full_prompt)
 
         # Cite — existing CitationEngine output, no new marker syntax (§7.5).

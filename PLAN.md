@@ -1098,8 +1098,14 @@ flips pending.
   **T3 DONE 2026-09-12** — opt-in dispatch (`agent/code_route.py`:
   `decide_code_route`/`run_code_route`, `HeuristicCodeIntentClassifier`,
   `CODE_ROUTE_ENABLED`/`CODE_INTENT_PHRASES` levers) + T1→T2 verdict wiring
-  (`CodeRequest.block_verdicts`, `combine_verdicts`), 14 tests, still no
-  reformulation loop; next: T4 validation loop + cap.
+  (`CodeRequest.block_verdicts`, `combine_verdicts`), 14 tests;
+  **T4 DONE 2026-09-12** — validation loop + cap inside `run_code_route`
+  (`_run_code_validation_loop`): generate → validate → reformulate with
+  `CODE_FIX_PROMPT` (failure reasons inline) up to
+  `CODE_VALIDATE_MAX_TURNS` (default 2); fully validated (every check PASS,
+  SKIP ≠ validated) → returned; persistent failure → `refuse_code` →
+  "couldn't validate" + retrieved sources, 5 tests; next: T5 code eval rows
+  + T6 API/UI.
 - summary (SPEC §8, verbatim scope): >
     Documentation retrieval → generate code → validate against retrieved
     API/schema/examples → return code + sources. Only after the core is

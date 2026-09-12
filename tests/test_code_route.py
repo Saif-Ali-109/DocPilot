@@ -228,7 +228,10 @@ def test_explicit_opt_in_takes_code_route_without_lever():
     assert result.code.has_code
 
 
-def test_validator_none_leaves_verdicts_empty():
+def test_validator_defaults_to_retrieve_then_validate():
+    # T4: validator=None → structural validation runs by default (§7.5 —
+    # unvalidated code is never returned).  T2-style raw output is only
+    # available through ask_code() directly.
     retriever = _FakeRetriever([TUTORIAL])
     generator = _FakeGenerator(code_text=VALID_CODE)
     result = run_code_route(
@@ -237,10 +240,12 @@ def test_validator_none_leaves_verdicts_empty():
         retriever=retriever,
         generator=generator,
         validator=None,
+        max_validation_turns=0,
     )
     assert result.code is not None
-    assert result.code.block_verdicts == []
-    assert result.code.verdict is None
+    assert len(result.code.block_verdicts) == 1
+    assert result.code.verdict is not None
+    assert result.code.verdict.passed
 
 
 def test_run_code_route_dispatches_to_standard_path_when_off():
