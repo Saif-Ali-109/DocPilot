@@ -3,7 +3,7 @@ title: DocPilot — ACTIVE current view
 role: derived current view — phase, gates, constants, load index
 authority: lowest — fix ACTIVE if it contradicts SPEC/PLAN
 load: read whole — the only file meant to be read whole
-last_updated: 2026-09-11
+last_updated: 2026-09-12
 ---
 
 # ACTIVE — DocPilot current view (derived, never authoritative)
@@ -34,6 +34,13 @@ last_updated: 2026-09-11
   PLAN §6.5.
 - **Decision: `HYBRID_ENABLED` stays OFF** — no net answer-level win; same
   verdict shape as RERANK (retrieval gain ≠ answer-level gain).
+- **WI-1 Judge-skip gate COMPLETE** — stamp `20260912_083701` (0.5), `20260912_102852`
+  (0.6), `20260912_103621` (0.7), all on gpt-oss-120b; 0.0 baseline
+  `20260912_082131` on gpt-oss-20b.  Correctness regressed at every threshold:
+  0.900 → 0.833 (−6.7pp) / 0.783 (−11.7pp) / 0.733 (−16.7pp).  Live-state
+  category (bl01–bl04) systematically broken: tool_calls 0.20→0.00,
+  correct→refused/partial on all 4 rows.  **Decision: `AGENT_JUDGE_SKIP_MIN_SCORE`
+  locked at 0.0 (disabled).**  Full table + flips in `wi1_analyze2.py` output.
 - Phase 6 ACTIVE (sign-off 2026-09-12): building per PLAN §7.3 — **T7 + T1
   DONE** (hermetic `CodeValidator` + fixture corpus + 16 tests); **T2 DONE**
   (`ask_code` codegen pipeline, 6 tests); **T3 DONE** (opt-in code dispatch
@@ -58,7 +65,10 @@ last_updated: 2026-09-11
     variants, ~85 s/predict CPU). Permanent verdict; revisit only with a new
     corpus. Do not re-enable to "fix" retrieval.
   - `HYBRID_ENABLED=OFF` — until the hybrid gate passes (§1).
-  - `AGENT_JUDGE_SCORE_FLOOR=OFF` — judge-skip stays disabled.
+  - `AGENT_JUDGE_SKIP_MIN_SCORE=0.0` — judge-skip **disabled by evidence gate**
+    (WI-1: every threshold 0.5/0.6/0.7 regressed correctness −6.7/−11.7/−16.7pp
+    and broke live-state tool calls 0.20→0.00).
+  - `AGENT_JUDGE_SCORE_FLOOR=0.0` — score-floor backstop disabled (no gate yet).
   - Gate-only weights: hybrid **2.0 / 1.0** — never default; `HybridRetriever`
     ctor stays 1.0/1.0 for tests.
 - **Quota facts (Groq)**:
@@ -85,20 +95,22 @@ last_updated: 2026-09-11
   rows, full-set report preserved.
 - Hybrid gate DONE 2026-09-12 — verdict `HYBRID_ENABLED` stays OFF (evidence
   in §1 + PLAN §6.5); reports committed (stamp `20260912_080743`).
+- **WI-1 Judge-skip gate DONE 2026-09-12** — stamps `20260912_082131` (0.0),
+  `20260912_083701` (0.5), `20260912_102852` (0.6), `20260912_103621` (0.7).
+  Evidence: correctness 0.900→0.833/0.783/0.733; tool_calls 0.20→0.00 (live-
+  state broken); latency 26.8s→14.0/11.8/11.0s. **Locked at 0.0 (disabled).**
 - Code eval `20260912_codefix` COMPLETE — report
   `src/docpilot/eval/reports/code_benchmark_20260912_codefix.json`
   (6 rows, committed as evidence): validation-pass 0.75, compiles 1.0,
   citation-gold 0.333, refusal accuracy 0.833, avg 1.7 validation turns,
   ~11.4 s/row (live-run budget TPD-rolled-off; every row retried until
   scored).
-- Main-benchmark resume stamp `20260912_102852` COMPLETE — classic +
-  agentic reports written (`benchmark_20260912_102852*.json`); clean
-  stamp, not a forbidden partial run.
 - Phase 6 COMPLETE — §7.5 exit-criteria sweep passed and `phase-6` tag
   cut; T1–T6 done (see §1 gate status). Levers stay OFF (gate verdict).
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
-  Phase 6 signed off AND exited (§7.5 sweep + tag). No other open gates;
-  levers stay OFF permanently on this corpus.
+  WI-1 judge-skip gate decided (threshold 0.0 locked), Phase 6 signed off
+  AND exited (§7.5 sweep + tag). No other open gates; levers stay OFF
+  permanently on this corpus.
 
 ## 4. Load index — read ONLY these SPEC/PLAN lines
 

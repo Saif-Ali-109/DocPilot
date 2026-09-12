@@ -127,9 +127,15 @@ AGENT_JUDGE_SKIP_MIN_SCORE: float = float(os.getenv("AGENT_JUDGE_SKIP_MIN_SCORE"
 When ``0.0`` (default) the agentic loop always runs the judge LLM call — Phase
 2/4 behaviour unchanged.  When ``> 0``, the retrieve node marks
 ``skip_judge`` when the top retrieval score clears the threshold and the graph
-routes straight to the answer node (one LLM call saved per question).  The
-threshold is deliberately disabled until the before/after §6.1 benchmark run
-justifies a value — the locked evaluation gate decides, not an ad hoc guess."""
+routes straight to the answer node (one LLM call saved per question).
+
+**WI-1 evidence gate (2026-09-12, gpt-oss-120b, n=30×4):** every threshold
+tested (0.5, 0.6, 0.7) regressed correctness vs the 0.0 baseline:
+0.900 → 0.833 / 0.783 / 0.733.  The live-state category (bl01–bl04) is
+systematically broken because the judge gate is the only trigger for the
+GitHub tool call; skipping it drops tool_calls from 0.20 → 0.00 and causes
+correct→refused/partial flips on all four live-state rows.  No threshold
+meets the "no regression" gate.  Threshold remains locked at 0.0."""
 
 AGENT_JUDGE_MODEL: str = os.getenv("AGENT_JUDGE_MODEL", "")
 """Optional separate Groq model for the judge; empty string → ``GROQ_MODEL``."""
