@@ -1094,8 +1094,12 @@ flips pending.
   grounded, fully hermetic) + fixture corpus (`tests/fixtures/codegen`) + 16
   tests; **T2 DONE 2026-09-12** — `ask_code` code pipeline
   (`src/docpilot/codegen/`, `CodeRequest`, `CODE_PROMPT`) behind
-  `Retriever`/`Generator`/`CitationEngine`, no validation loop yet; next:
-  T3 opt-in route wiring + T4 validation loop.
+  `Retriever`/`Generator`/`CitationEngine`, no validation loop yet;
+  **T3 DONE 2026-09-12** — opt-in dispatch (`agent/code_route.py`:
+  `decide_code_route`/`run_code_route`, `HeuristicCodeIntentClassifier`,
+  `CODE_ROUTE_ENABLED`/`CODE_INTENT_PHRASES` levers) + T1→T2 verdict wiring
+  (`CodeRequest.block_verdicts`, `combine_verdicts`), 14 tests, still no
+  reformulation loop; next: T4 validation loop + cap.
 - summary (SPEC §8, verbatim scope): >
     Documentation retrieval → generate code → validate against retrieved
     API/schema/examples → return code + sources. Only after the core is

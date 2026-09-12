@@ -16,6 +16,7 @@ from docpilot.validation.verdict import (
     CheckStatus,
     ValidationCheck,
     ValidationVerdict,
+    combine_verdicts,
 )
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "ValidationCheck",
     "ValidationVerdict",
     "CheckStatus",
+    "combine_verdicts",
     "extract_code_blocks",
     "harvest_api_surface",
 ]

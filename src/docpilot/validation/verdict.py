@@ -9,6 +9,7 @@ No LLM, no network — pure data types.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 
@@ -55,3 +56,25 @@ class ValidationVerdict:
             return f"PASS ({len(self.checks)} checks)"
         first = self.reasons[0] if self.reasons else "unknown failure"
         return f"FAIL: {first}"
+
+
+def combine_verdicts(verdicts: Sequence[ValidationVerdict]) -> ValidationVerdict:
+    """Merge per-block validation verdicts into one overall verdict.
+
+    Each check is prefixed with its block index (``block[0].parse`` …) so the
+    combined verdict stays inspectable; the overall verdict passes only when
+    every block passes.  Used by the T3/T4 code route to judge a multi-block
+    code output as a whole.
+    """
+    checks: list[ValidationCheck] = []
+    for index, verdict in enumerate(verdicts):
+        for check in verdict.checks:
+            checks.append(
+                ValidationCheck(
+                    f"block[{index}].{check.name}", check.status, check.detail
+                )
+            )
+    return ValidationVerdict(
+        passed=all(c.status is not CheckStatus.FAIL for c in checks),
+        checks=tuple(checks),
+    )

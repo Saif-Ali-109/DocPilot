@@ -64,8 +64,12 @@ class CodeRequest:
         latency_ms: Total wall time of the code pipeline, in milliseconds.
         refused: ``True`` when the raw response contains the SPEC §3.9
             refusal sentence (uncovered request ⇒ no code).
-        verdict: Validation verdict, filled by the T3/T4 wiring; ``None``
-            while the T2-only pipeline is used.
+        verdict: Overall validation verdict over ``block_verdicts``, filled
+            by the T3/T4 wiring; ``None`` while nothing was validated (no
+            code emitted, or no validator wired in).
+        block_verdicts: One :class:`ValidationVerdict` per emitted code block
+            (T3 wiring — verdicts are attached in order; length matches
+            ``code_blocks`` whenever a validator ran).
     """
 
     question: str
@@ -79,6 +83,7 @@ class CodeRequest:
     latency_ms: float = 0.0
     refused: bool = False
     verdict: ValidationVerdict | None = None
+    block_verdicts: list[ValidationVerdict] = field(default_factory=list)
 
     @property
     def display(self) -> str:
