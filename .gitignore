@@ -24,3 +24,11 @@ data/
 
 # --- Chainlit generated i18n (config.toml is committed) ---
 .chainlit/translations/
+
+# --- Transient / partial eval-report artifacts (never committed) ---
+# Completed benchmark runs ARE committed evidence; these specific stamps are
+# flawed/partial runs whose provenance was never resolved (§6.5 era) — they
+# must not re-enter history via a `git add` of the eval package.
+src/docpilot/eval/reports/benchmark_20260908_184441*.json
+src/docpilot/eval/reports/benchmark_20260912_082131*.json
+src/docpilot/eval/reports/benchmark_20260912_083701*
