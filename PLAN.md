@@ -23,7 +23,7 @@ last_updated: 2026-09-11
     optional code validation → extract reusable framework components.
     Do not skip ahead. Do not let later phases' ambitions leak into earlier
     phases' scope.
-- current_phase: 5 (IN PROGRESS — API + UI; SPEC §7 + amendment 2026-09-09; §6 task breakdown)
+- current_phase: 6 (IN PROGRESS — Code Generation / Validation; SPEC §8; task breakdown §7; entered 2026-09-12, user sign-off)
 - working_repo: https://github.com/Saif-Ali-109/DocPilot.git
 - working_dir: /home/ain/Desktop/RAG
 - spec_source_of_truth: >
@@ -1086,11 +1086,9 @@ the observed gaps — the bd17 regression is a ranking effect, not scoring noise
 flips pending.
 
 ## 7. phase_6: "Code Generation / Validation"
-- status: PLANNED — gated; **no implementation before user sign-off to enter
-  the phase** (AGENTS.md rule 3 — never self-enter). The §6.5 gate question is
-  resolved (2026-09-12: `HYBRID_ENABLED` stays OFF — verdict in §6.5); only
-  items 3–4 of §7.1 (sign-off + `current_phase` flip) remain. This section is
-  the working HOW for that phase, not a license to start it.
+- status: IN PROGRESS — entered 2026-09-12 (user sign-off per AGENTS.md rule
+  3; milestone `phase-6-start` cut). §6.5 gate question resolved same day:
+  `HYBRID_ENABLED` stays OFF — Phase 6 builds on the levers-off foundation.
 - summary (SPEC §8, verbatim scope): >
     Documentation retrieval → generate code → validate against retrieved
     API/schema/examples → return code + sources. Only after the core is
@@ -1109,9 +1107,10 @@ flips pending.
       (recall gate already: MRR 0.717→0.783, recall parity — answer level is
       the last evidence) — **DONE 2026-09-12: verdict = keep `HYBRID_ENABLED=0`
       (no net answer-level win; see §6.5 verdict)**
-- [ ] user sign-off to enter Phase 6 (per AGENTS.md rule 3 — never self-enter)
-- [ ] only then: flip PLAN `current_phase` → 6 and cut the `phase-6-start`
-      branch/milestone
+- [x] user sign-off to enter Phase 6 (per AGENTS.md rule 3 — never self-enter)
+      — **DONE 2026-09-12**
+- [x] only then: flip PLAN `current_phase` → 6 and cut the `phase-6-start`
+      branch/milestone — **DONE 2026-09-12**
 
 ### 7.2 task breakdown & file ownership (single dev; ownership = area of change)
 

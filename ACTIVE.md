@@ -16,9 +16,10 @@ last_updated: 2026-09-11
 
 ## 1. Status
 
-- current_phase: **pre-Phase-6 sign-off** (Phase 5 COMPLETE). The §6.5 gate
-  question is decided (`HYBRID_ENABLED` stays OFF — verdict PLAN §6.5); Phase 6
-  waits only on user sign-off (AGENTS.md rule 3 → PLAN §7.1 items 3–4).
+- current_phase: **6 — Code Generation / Validation, IN PROGRESS** (entered
+  2026-09-12, user sign-off; milestone `phase-6-start` cut). §6.5 gate
+  resolved: `HYBRID_ENABLED` stays OFF — Phase 6 builds on the levers-off
+  foundation.
 - last_updated: 2026-09-12
 - servers: uvicorn :8000 (`/api/v1/health` — store ok, ~15.3k chunks),
   chainlit :8050 — keep both healthy.
@@ -33,8 +34,8 @@ last_updated: 2026-09-11
   PLAN §6.5.
 - **Decision: `HYBRID_ENABLED` stays OFF** — no net answer-level win; same
   verdict shape as RERANK (retrieval gain ≠ answer-level gain).
-- Blocking Phase 6 now: **only your sign-off** (AGENTS.md rule 3). Then
-  `current_phase` → 6 + `phase-6-start` milestone (§7.1 items 3–4).
+- Phase 6 ACTIVE (sign-off 2026-09-12): building per PLAN §7.3 — currently
+  **T7 fixtures + T1 CodeValidator** (hermetic starter, no LLM).
 
 ## 2. Contract constants
 
@@ -74,8 +75,11 @@ last_updated: 2026-09-11
   rows, full-set report preserved.
 - Hybrid gate DONE 2026-09-12 — verdict `HYBRID_ENABLED` stays OFF (evidence
   in §1 + PLAN §6.5); reports committed (stamp `20260912_080743`).
-- Allowed while gated: retrieval/test/docs work + planning only — no Phase 6
-  implementation, no lever flips.
+- Phase 6 ACTIVE (sign-off 2026-09-12): building per PLAN §7.3 — T7 fixtures +
+  T1 `CodeValidator` first (hermetic, no LLM); then T2–T6. Levers stay OFF
+  (gate verdict).
+- Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF), Phase 6
+  signed off. No other open gates; levers stay OFF permanently on this corpus.
 
 ## 4. Load index — read ONLY these SPEC/PLAN lines
 
