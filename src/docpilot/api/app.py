@@ -10,6 +10,9 @@ Endpoints:
     GET  /api/v1/health                 {status, store, corpus}
     POST /api/v1/chat                   SSE stream (question → gate/search/
                                         token/answer/done events)
+    POST /api/v1/code                   SSE stream over the *explicit* Phase 6
+                                        code route (gate/search/code-verdict/
+                                        answer/done events)
     POST /api/v1/sessions               create a chat session
     GET  /api/v1/sessions               list sessions (newest first)
     GET  /api/v1/sessions/{id}          session + messages
@@ -31,7 +34,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from docpilot.api.service import ask_events
+from docpilot.api.service import ask_events, code_events
 from docpilot.api.sse import sse_line
 from docpilot.api.store import SessionStore
 
@@ -55,12 +58,23 @@ class CreateSessionRequest(BaseModel):
     title: str | None = Field(default=None, max_length=200)
 
 
+class CodeChatRequest(BaseModel):
+    """Body of ``POST /api/v1/code`` — the explicit Phase 6 code route."""
+
+    question: str = Field(min_length=1, max_length=2000)
+    session_id: str | None = None
+    top_k: int | None = Field(default=None, ge=1, le=20)
+    language: str | None = None
+    model: str | None = None
+
+
 def create_app(
     *,
     store: SessionStore | None = None,
     engine: Callable[..., dict] | None = None,
+    code_engine: Callable[..., dict] | None = None,
 ) -> FastAPI:
-    """Build the app with injectable store + ask engine (hermetic tests).
+    """Build the app with injectable store + ask engines (hermetic tests).
 
     Args:
         store: A :class:`SessionStore`; defaults to one over
@@ -68,9 +82,13 @@ def create_app(
         engine: The ask callable — must match :func:`ask_events`' signature
             (question + keyword overrides + ``emit``).  Defaults to the real
             production engine.
+        code_engine: The code-route callable — must match
+            :func:`code_events`' signature.  Defaults to the real production
+            code engine used by ``POST /api/v1/code``.
     """
     store = store or SessionStore()
     engine = engine or ask_events
+    code_engine = code_engine or code_events
 
     app = FastAPI(
         title="DocPilot API",
@@ -103,6 +121,21 @@ def create_app(
     async def chat(body: ChatRequest) -> StreamingResponse:
         return StreamingResponse(
             _chat_stream(body, store=store, engine=engine),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+            },
+        )
+
+    @app.post("/api/v1/code")
+    async def code(body: CodeChatRequest) -> StreamingResponse:
+        """Explicit Phase 6 code route (PLAN §7.2 T6): streams the gate,
+        per-attempt search + validation verdicts, and the final (validated or
+        refused-with-sources) answer."""
+        return StreamingResponse(
+            _code_stream(body, store=store, engine=code_engine),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -148,9 +181,18 @@ def create_app(
 # ---------------------------------------------------------------------------
 
 
-async def _chat_stream(body: ChatRequest, *, store: SessionStore, engine: Callable[..., dict]):
-    """Run the question in a worker thread, bridge emit events to the SSE
-    stream, persist the exchange into the session store on completion."""
+async def _engine_stream(
+    engine: Callable[..., dict],
+    *,
+    question: str,
+    kwargs: dict,
+    body,
+    store: SessionStore,
+):
+    """Run an engine callable in a worker thread, bridge its emit events to
+    the SSE stream, and persist the exchange (user + assistant messages) once
+    the run finishes — shared by the chat and code endpoints (Plan §7.2 T6
+    reuses Phase 5 patterns untouched)."""
     queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=2048)
     loop = asyncio.get_running_loop()
     result: dict = {}
@@ -160,18 +202,10 @@ async def _chat_stream(body: ChatRequest, *, store: SessionStore, engine: Callab
 
     async def worker() -> None:
         try:
-            out = await asyncio.to_thread(
-                engine,
-                body.question,
-                strategy=body.strategy,
-                top_k=body.top_k,
-                language=body.language,
-                model=body.model,
-                emit=emit,
-            )
+            out = await asyncio.to_thread(engine, question, **kwargs, emit=emit)
             result.update(out or {})
         except Exception as exc:  # noqa: BLE001 — surfaced to the client
-            logger.exception("chat worker failed")
+            logger.exception("stream worker failed")
             try:
                 emit({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
             except Exception:  # noqa: BLE001 — never raise from the error path
@@ -205,6 +239,33 @@ async def _chat_stream(body: ChatRequest, *, store: SessionStore, engine: Callab
             latency_ms=result.get("latency_ms"),
             refused=bool(result.get("refused", False)),
         )
+
+
+async def _chat_stream(body: ChatRequest, *, store: SessionStore, engine: Callable[..., dict]):
+    """Run the ask engine over the chat body (strategy/top_k/language/model)."""
+    kwargs = {
+        "strategy": body.strategy,
+        "top_k": body.top_k,
+        "language": body.language,
+        "model": body.model,
+    }
+    async for line in _engine_stream(
+        engine, question=body.question, kwargs=kwargs, body=body, store=store
+    ):
+        yield line
+
+
+async def _code_stream(body: CodeChatRequest, *, store: SessionStore, engine: Callable[..., dict]):
+    """Run the code engine over the code body (explicit Phase 6 route)."""
+    kwargs = {
+        "top_k": body.top_k,
+        "language": body.language,
+        "model": body.model,
+    }
+    async for line in _engine_stream(
+        engine, question=body.question, kwargs=kwargs, body=body, store=store
+    ):
+        yield line
 
 
 # ---------------------------------------------------------------------------

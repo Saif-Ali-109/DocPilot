@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from docpilot import config
 from docpilot.agent.gate import _normalise
@@ -49,6 +49,17 @@ class CodeRouteDecision:
 
     code: bool
     reason: str
+
+
+# Lifecycle hook kinds emitted by :func:`run_code_route` when ``on_event`` is
+# given (API-agnostic; the SSE layer maps them to wire events):
+#
+#   "gated"   — {"code": bool, "reason": str} right after the dispatch
+#               decision.
+#   "attempt" — {"turn": 1-based generation attempt, "request": CodeRequest}
+#               after every ``ask_code`` call is validated (or refused/empty),
+#               so a streaming caller can render retrieval + verdicts live.
+_EVENT_KINDS: tuple[str, ...] = ("gated", "attempt")
 
 
 class CodeIntentClassifier(ABC):
@@ -150,6 +161,7 @@ def run_code_route(
     max_validation_turns: int | None = None,
     top_k: int | None = None,
     language: str | None = None,
+    on_event: Callable[[str, dict], None] | None = None,
 ) -> CodeRouteResult:
     """Route *question* through the validated code path only when allowed.
 
@@ -177,6 +189,11 @@ def run_code_route(
         retriever / generator / citation_engine: Injectable components
             (defaults build the production PG/Groq stack, lazily).
         top_k / language: Retrieval knobs, same semantics as ``ask()``.
+        on_event: Optional lifecycle hook ``(kind, payload)`` — ``"gated"``
+            after the dispatch decision and ``"attempt"`` after every
+            generation+validation turn (see module ``_EVENT_KINDS``).  The
+            payload is API-agnostic; the SSE layer (``api/service.code_events``)
+            maps these to wire events for live rendering.
 
     Returns:
         A :class:`CodeRouteResult`: ``code`` set on the code route (validated
@@ -185,6 +202,8 @@ def run_code_route(
     decision = decide_code_route(
         question, enabled=enabled, explicit=explicit_code
     )
+    if on_event is not None:
+        on_event("gated", {"code": decision.code, "reason": decision.reason})
     if not decision.code:
         from docpilot.pipeline_ask import ask
 
@@ -214,6 +233,7 @@ def run_code_route(
         max_turns=max_validation_turns,
         top_k=top_k,
         language=language,
+        on_event=on_event,
     )
     return CodeRouteResult(decision=decision, code=request)
 
@@ -228,6 +248,7 @@ def _run_code_validation_loop(
     max_turns: int,
     top_k: int | None,
     language: str | None,
+    on_event: Callable[[str, dict], None] | None = None,
 ) -> CodeRequest:
     """The T4 loop: generate → validate → reformulate, capped, then refuse.
 
@@ -267,7 +288,11 @@ def _run_code_validation_loop(
                     for reason in verdict.reasons
                 }
             )
-        else:
+
+        if on_event is not None:
+            on_event("attempt", {"turn": turn + 1, "request": request})
+
+        if not request.code_blocks:
             # No code emitted (model refusal / prose-only) — nothing to
             # validate, nothing to loop on.
             break

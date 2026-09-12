@@ -41,7 +41,10 @@ last_updated: 2026-09-11
   (validation loop + cap, `CODE_VALIDATE_MAX_TURNS`, refusal-with-sources on
   persistent failure, 5 tests); **T5 DONE** (code eval —
   `eval/code_benchmark.py` + committed dataset, validation-pass/citation
-  metrics, 17 tests); next: T6 API/UI (POST /api/v1/code + Chainlit control).
+  metrics, 17 tests); **T6 DONE** (API/UI — `POST /api/v1/code` streaming
+  route + `service.code_events` with the new `code` validation-verdict
+  event, Chainlit *Generate validated code* settings toggle, 11 tests);
+  next: §7.5 exit-criteria sweep + `phase-6` tag.
 
 ## 2. Contract constants
 

@@ -9,10 +9,17 @@ JSON dict on a ``data:`` line.  UI clients switch on ``event["type"]``:
               latency_ms}
     judge     (agentic path, via ``step`` with step=="judge")
     tool_call (agentic path, via ``step`` with step=="tool_call")
+    code      (code route) one generation attempt's validation verdict
+              {attempt, code_blocks, verdicts, passed, validation_failed,
+              refused, reasons, attempt_latency_ms}
     token     one streamed answer delta {delta}
-    answer    final display text + sources {text, sources, refused, direct}
+    answer    final display text + sources {text, sources, refused, direct};
+              on the code route also carries ``code``, ``validation_failed``,
+              ``validation_reasons``, ``validation_turns`` and the overall
+              ``verdict`` (the per-attempt verdicts arrive via ``code`` events)
     error     {message}
-    done      {trace, latency_ms, usage} — terminal event
+    done      {trace, latency_ms, usage, validation_turns?,
+              validation_failed?} — terminal event
 """
 
 from __future__ import annotations

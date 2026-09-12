@@ -72,6 +72,9 @@ class CodeRequest:
         results: The raw :class:`RetrieverResult` list from the store.
         raw_prompt: The full code prompt built from ``CODE_PROMPT`` with the
             context/sources/question substituted (for debugging).
+        retrieval_latency_ms: Wall time of the retriever call alone (for the
+            API debug panel — the code route's search event reports the true
+            retrieval time, not the whole attempt).
         latency_ms: Total wall time of the code pipeline, in milliseconds.
         refused: ``True`` when the raw response contains the SPEC §3.9
             refusal sentence (uncovered request ⇒ no code).
@@ -100,6 +103,7 @@ class CodeRequest:
     sources: list[SourceRef] = field(default_factory=list)
     results: list[RetrieverResult] = field(default_factory=list)
     raw_prompt: str = ""
+    retrieval_latency_ms: float = 0.0
     latency_ms: float = 0.0
     refused: bool = False
     verdict: ValidationVerdict | None = None
@@ -191,7 +195,9 @@ def ask_code(
 
     started = time.perf_counter()
     try:
+        retrieval_started = time.perf_counter()
         results = retriever.retrieve(question, top_k=top_k, language=filter_language)
+        retrieval_latency_ms = (time.perf_counter() - retrieval_started) * 1000.0
         for i, r in enumerate(results):
             logger.debug(
                 "Retrieved chunk %d: id=%s score=%.4f file=%s heading=%s",
@@ -274,6 +280,7 @@ def ask_code(
         sources=sources,
         results=results,
         raw_prompt=full_prompt,
+        retrieval_latency_ms=retrieval_latency_ms,
         latency_ms=(time.perf_counter() - started) * 1000.0,
         refused=refused,
     )

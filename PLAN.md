@@ -1112,7 +1112,17 @@ flips pending.
   citation-gold accuracy via the main benchmark's marker logic, refusal
   accuracy, avg validation turns/latency); reuses the harness recipe
   (duck-typed runner, jsonl row checkpoints + resume, TPD abort); CLI
-  `python -m docpilot.eval code-benchmark`, 17 tests; next: T6 API/UI.
+  `python -m docpilot.eval code-benchmark`, 17 tests;
+  **T6 DONE 2026-09-12** — API/UI surface reusing Phase 5 patterns:
+  `run_code_route(on_event=...)` lifecycle hooks ("gated"/"attempt"),
+  `api/service.code_events` streaming the code route as SSE (gate step →
+  per-attempt `search` + new `code` validation-verdict event (checks with
+  PASS/FAIL/SKIP) → `answer` with code/validation payloads → `done` with
+  `validation_turns`), `POST /api/v1/code` streaming route + session
+  persistence (shared `_engine_stream`), Chainlit per-session *Generate
+  validated code* settings toggle (explicit opt-in) + verification-verdict
+  trace steps, `CodeRequest.retrieval_latency_ms` for honest search
+  latency; 11 tests; next: §7.5 exit-criteria sweep + `phase-6` tag.
 - summary (SPEC §8, verbatim scope): >
     Documentation retrieval → generate code → validate against retrieved
     API/schema/examples → return code + sources. Only after the core is
