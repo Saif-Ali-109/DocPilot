@@ -1104,8 +1104,15 @@ flips pending.
   `CODE_FIX_PROMPT` (failure reasons inline) up to
   `CODE_VALIDATE_MAX_TURNS` (default 2); fully validated (every check PASS,
   SKIP ≠ validated) → returned; persistent failure → `refuse_code` →
-  "couldn't validate" + retrieved sources, 5 tests; next: T5 code eval rows
-  + T6 API/UI.
+  "couldn't validate" + retrieved sources, 5 tests;
+  **T5 DONE 2026-09-12** — code eval (`src/docpilot/eval/code_benchmark.py`
+  + `dataset/code_benchmark.json`, 6 committed rows): metrics over the
+  §7.2 T5 golds (validation-pass rate, compile/imports-grounding/
+  symbols-grounding rates, gold-surface usage, gold-import usage,
+  citation-gold accuracy via the main benchmark's marker logic, refusal
+  accuracy, avg validation turns/latency); reuses the harness recipe
+  (duck-typed runner, jsonl row checkpoints + resume, TPD abort); CLI
+  `python -m docpilot.eval code-benchmark`, 17 tests; next: T6 API/UI.
 - summary (SPEC §8, verbatim scope): >
     Documentation retrieval → generate code → validate against retrieved
     API/schema/examples → return code + sources. Only after the core is

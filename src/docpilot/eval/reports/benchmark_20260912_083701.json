@@ -1,0 +1,7 @@
+{
+  "dataset_path": "/home/ain/Desktop/RAG/src/docpilot/eval/dataset/benchmark.json",
+  "generated_at": "2026-09-12T09:40:57",
+  "note": "PARTIAL \u2014 only  written (missing agentic, classic); rerun the missing half with --pipeline and --resume STAMP to resume.",
+  "pipelines": {},
+  "comparison": null
+}

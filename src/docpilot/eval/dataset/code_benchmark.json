@@ -1,0 +1,58 @@
+{
+  "questions": [
+    {
+      "id": "c01",
+      "request": "Write code for a minimal FastAPI application with a GET endpoint on the root path.",
+      "gold_imports": ["fastapi"],
+      "gold_surface": ["FastAPI", "app", "get"],
+      "gold_sources": ["en/docs/tutorial/first-steps.md"],
+      "refusal_expected": false,
+      "note": "First-steps tutorial: FastAPI(), @app.get(\"/\"), read_root-style handler."
+    },
+    {
+      "id": "c02",
+      "request": "Show me how to read a query parameter with a default value using FastAPI.",
+      "gold_imports": ["fastapi"],
+      "gold_surface": ["FastAPI", "Query"],
+      "gold_sources": ["en/docs/tutorial/query-params.md"],
+      "refusal_expected": false,
+      "note": "Query-params tutorial: `from fastapi import FastAPI, Query`; Query(default=...) in a signature."
+    },
+    {
+      "id": "c03",
+      "request": "Write a FastAPI endpoint that returns a Pydantic response model.",
+      "gold_imports": ["fastapi", "pydantic"],
+      "gold_surface": ["FastAPI", "BaseModel", "Item"],
+      "gold_sources": ["en/docs/tutorial/response-model.md"],
+      "refusal_expected": false,
+      "note": "Response-model tutorial: pydantic BaseModel subclass, response_model=Item."
+    },
+    {
+      "id": "c04",
+      "request": "Write code for a custom middleware class and register it on a FastAPI app.",
+      "gold_imports": ["fastapi"],
+      "gold_surface": ["BaseHTTPMiddleware", "add_middleware"],
+      "gold_sources": ["en/docs/tutorial/middleware.md"],
+      "refusal_expected": false,
+      "note": "Middleware tutorial: BaseHTTPMiddleware subclass + app.add_middleware(CustomMiddleware)."
+    },
+    {
+      "id": "c05",
+      "request": "Write code that runs a background task after the response using FastAPI.",
+      "gold_imports": ["fastapi"],
+      "gold_surface": ["FastAPI", "BackgroundTasks"],
+      "gold_sources": ["en/docs/tutorial/background-tasks.md"],
+      "refusal_expected": false,
+      "note": "Background-tasks tutorial: BackgroundTasks parameter, background_tasks.add_task(...)."
+    },
+    {
+      "id": "c06",
+      "request": "Write a Django model for a blog post with a slug field.",
+      "gold_imports": [],
+      "gold_surface": [],
+      "gold_sources": [],
+      "refusal_expected": true,
+      "note": "The corpus is FastAPI/Python-docs only — Django is uncovered; the code route must refuse with the SPEC §3.9 sentence, never fabricate."
+    }
+  ]
+}

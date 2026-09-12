@@ -86,6 +86,10 @@ class CodeRequest:
             answer is then the refusal message, never the failed code.
         validation_reasons: Union of the failure reasons across all block
             verdicts (what the T4 loop fed back for reformulation).
+        generation_attempts: Number of generator calls the T4 loop spent on
+            this request (1 = validated on the first attempt; > 1 =
+            reformulations happened).  Set by the loop; ``1`` for a plain
+            ``ask_code`` call.
     """
 
     question: str
@@ -102,6 +106,7 @@ class CodeRequest:
     block_verdicts: list[ValidationVerdict] = field(default_factory=list)
     validation_failed: bool = False
     validation_reasons: list[str] = field(default_factory=list)
+    generation_attempts: int = 1
 
     @property
     def display(self) -> str:

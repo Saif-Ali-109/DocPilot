@@ -4,6 +4,7 @@ Subcommands (SPEC §6.2 slices):
   - ``judge-ab``        (default) judge two-prompt A/B calibration
   - ``tool-necessity``  tri-class tool-trigger necessity measurement
   - ``benchmark``       §6.1 classic-vs-agentic comparison over the benchmark
+  - ``code-benchmark``  Phase 6 code eval — validation-pass + citations (T5)
 """
 
 from __future__ import annotations
@@ -21,6 +22,10 @@ def main(argv: list[str] | None = None) -> int:
         from docpilot.eval.benchmark import main as benchmark_main
 
         return benchmark_main(args[1:])
+    if args and args[0] == "code-benchmark":
+        from docpilot.eval.code_benchmark import main as code_benchmark_main
+
+        return code_benchmark_main(args[1:])
     from docpilot.eval.judge_ab import main as judge_ab_main
 
     return judge_ab_main(args)

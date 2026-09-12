@@ -39,7 +39,9 @@ last_updated: 2026-09-11
   (`ask_code` codegen pipeline, 6 tests); **T3 DONE** (opt-in code dispatch
   `agent/code_route.py` + T1→T2 verdict wiring, 14 tests); **T4 DONE**
   (validation loop + cap, `CODE_VALIDATE_MAX_TURNS`, refusal-with-sources on
-  persistent failure, 5 tests); next: T5 code eval rows + T6 API/UI.
+  persistent failure, 5 tests); **T5 DONE** (code eval —
+  `eval/code_benchmark.py` + committed dataset, validation-pass/citation
+  metrics, 17 tests); next: T6 API/UI (POST /api/v1/code + Chainlit control).
 
 ## 2. Contract constants
 

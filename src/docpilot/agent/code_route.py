@@ -259,6 +259,7 @@ def _run_code_validation_loop(
                 validator.validate(block, evidence) for block in request.code_blocks
             ]
             request.verdict = combine_verdicts(request.block_verdicts)
+            request.generation_attempts = turn + 1
             request.validation_reasons = sorted(
                 {
                     reason
