@@ -26,7 +26,12 @@ from docpilot.generation.generator import Generator
 
 
 class StubGenerator(Generator):
-    """Minimal canned-response Generator that records calls and prompts."""
+    """Minimal canned-response Generator that records calls and prompts.
+
+    Only implements :meth:`generate` — the default ABC
+    :meth:`generate_system_user` delegates to it via concatenation, keeping
+    every existing assertion byte-identical.
+    """
 
     def __init__(self, response: str = "") -> None:
         self.response = response
@@ -36,6 +41,31 @@ class StubGenerator(Generator):
     def generate(self, prompt: str) -> str:
         self.calls += 1
         self.last_prompt = prompt
+        return self.response
+
+
+class RecordingGenerator(Generator):
+    """Generator that records *system* and *user* arguments separately.
+
+    Used to assert the two-message layout produced by
+    :meth:`generate_system_user`.
+    """
+
+    def __init__(self, response: str = "") -> None:
+        self.response = response
+        self.last_system: str | None = None
+        self.last_user: str | None = None
+        self.generate_calls = 0
+        self.generate_system_user_calls = 0
+
+    def generate(self, prompt: str) -> str:
+        self.generate_calls += 1
+        return self.response
+
+    def generate_system_user(self, system: str, user: str) -> str:
+        self.generate_system_user_calls += 1
+        self.last_system = system
+        self.last_user = user
         return self.response
 
 
@@ -324,6 +354,49 @@ class TestLLMSufficiencyJudge:
         assert "omit `ref`" in JUDGE_SYSTEM_PROMPT_B
         # JSON-only output directive (parse-failure contract parity).
         assert "No markdown fences" in JUDGE_SYSTEM_PROMPT_B
+
+
+class TestGenerateSystemUserTwoMessageLayout:
+    """Verify that the judge routes through ``generate_system_user`` and that
+    a generator implementing that method receives two separate messages
+    (``system`` + ``user``) rather than a single concatenated string."""
+
+    def test_judge_calls_generate_system_user(self) -> None:
+        rec = RecordingGenerator(
+            '{"verdict": "sufficient", "reason": "ok",'
+            ' "reformulated_query": null}'
+        )
+        judge = LLMSufficiencyJudge(rec)
+        judge.judge("How do parameters work?", [_result()], "parameters")
+        assert rec.generate_system_user_calls == 1
+        assert rec.generate_calls == 0
+
+    def test_system_and_user_are_separate(self) -> None:
+        rec = RecordingGenerator(
+            '{"verdict": "sufficient", "reason": "ok",'
+            ' "reformulated_query": null}'
+        )
+        judge = LLMSufficiencyJudge(rec, system_prompt="SYSTEM INSTRUCTIONS")
+        judge.judge("What is FastAPI?", [_result()], "FastAPI basics")
+        assert rec.last_system == "SYSTEM INSTRUCTIONS"
+        assert rec.last_user is not None
+        assert "What is FastAPI?" in rec.last_user
+        # The system prompt must NOT be embedded inside the user prompt.
+        assert "SYSTEM INSTRUCTIONS" not in rec.last_user
+
+    def test_default_abc_concatenates_for_stubs(self) -> None:
+        """Fakes that only implement ``generate()`` get byte-identical
+        behaviour via the ABC default (concatenation)."""
+        stub = StubGenerator(
+            '{"verdict": "sufficient", "reason": "ok",'
+            ' "reformulated_query": null}'
+        )
+        judge = LLMSufficiencyJudge(stub)
+        judge.judge("Q?", [_result()], "Q?")
+        assert stub.calls == 1
+        assert stub.last_prompt is not None
+        # Default ABC: generate(f"{system}\n\n{user}")
+        assert JUDGE_SYSTEM_PROMPT in stub.last_prompt
 
 
 class TestBuildJudgeUserPrompt:

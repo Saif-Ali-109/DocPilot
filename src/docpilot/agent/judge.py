@@ -124,9 +124,8 @@ class LLMSufficiencyJudge(SufficiencyJudge):
         user_prompt = build_judge_user_prompt(
             question, query_used, results, tools_available=tools_available
         )
-        full_prompt = f"{self._system_prompt}\n\n{user_prompt}"
 
-        raw = self._generator.generate(full_prompt)
+        raw = self._generator.generate_system_user(self._system_prompt, user_prompt)
 
         judgment = _parse_judgment(raw)
         logger.debug(

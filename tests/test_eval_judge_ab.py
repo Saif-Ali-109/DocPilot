@@ -17,6 +17,7 @@ from docpilot.agent.judge import LLMSufficiencyJudge, reset_judge_parse_fallback
 from docpilot.agent.types import Judgment
 from docpilot.core.models import RetrieverResult
 from docpilot.eval import judge_ab
+from docpilot.generation.generator import Generator
 from docpilot.eval.judge_ab import (
     build_ab_report,
     evaluate_prompt,
@@ -65,7 +66,10 @@ def _triple(tid: str = "x01", gold: str = "sufficient", category: str = "adversa
     )
 
 
-class StubGenerator:
+class StubGenerator(Generator):
+    """Duck-typed stub; now inherits from Generator to get the default
+    ``generate_system_user`` (concatenation fallback)."""
+
     def __init__(self, response: str) -> None:
         self.response = response
 

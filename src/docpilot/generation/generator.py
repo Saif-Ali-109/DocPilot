@@ -72,6 +72,15 @@ class Generator(ABC):
         """Send prompt to the LLM and return the generated answer string."""
         ...
 
+    def generate_system_user(self, system: str, user: str) -> str:
+        """Send separate *system* and *user* messages to the LLM.
+
+        Default implementation concatenates them into a single prompt and
+        delegates to :meth:`generate` — byte-identical to today's behaviour
+        for all concrete fakes that only implement ``generate()``.
+        """
+        return self.generate(f"{system}\n\n{user}")
+
     def generate_stream(self, prompt: str):
         """Yield text deltas for *prompt* (Phase 5 streaming, SPEC §7).
 
@@ -163,19 +172,54 @@ class GroqGenerator(Generator):
         (bounded by ``_RETRY_AFTER_MAX_SECONDS``); without one, exponential
         jitter applies.
         """
+        messages = [{"role": "system", "content": prompt}]
+        return self._complete(messages, prompt)
+
+    def generate_system_user(self, system: str, user: str) -> str:
+        """Send separate ``system`` and ``user`` messages to Groq.
+
+        Same retry/backoff and tool-use-guard machinery as :meth:`generate`.
+        The system message is sent as ``role: system``, the user message as
+        ``role: user`` — both through the shared :meth:`_complete` helper.
+        """
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        return self._complete(messages, f"{system}\n\n{user}")
+
+    # ------------------------------------------------------------------
+    # Internal send loop (shared by generate / generate_system_user)
+    # ------------------------------------------------------------------
+
+    def _complete(self, messages: list[dict], original_prompt: str) -> str:
+        """Send *messages* to Groq with retry/backoff.
+
+        *original_prompt* is the single-string prompt used for the
+        tool-use-guard fallback comparison (``effective_prompt is
+        original_prompt``).  For ``generate()`` it is the raw prompt; for
+        ``generate_system_user()`` it is the concatenated form — both paths
+        use the same guard-suffix logic.
+        """
         last_exc: Exception | None = None
-        effective_prompt = prompt
+        effective_prompt = original_prompt
 
         for attempt in range(self._max_retries):
             try:
+                # Build the messages list for this attempt.  On the first
+                # attempt ``effective_prompt is original_prompt`` so we use the
+                # caller-supplied messages verbatim.  When the tool-use/empty
+                # glitch fires we replace the system message content with the
+                # guarded prompt (and clear any user message — same as the
+                # original single-message path).
+                if effective_prompt is original_prompt:
+                    attempt_messages = messages
+                else:
+                    attempt_messages = [{"role": "system", "content": effective_prompt}]
+
                 response = self._client.chat.completions.create(
                     model=self._model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": effective_prompt,
-                        },
-                    ],
+                    messages=attempt_messages,
                     temperature=0,
                 )
                 content = response.choices[0].message.content  # type: ignore[union-attr]
@@ -186,10 +230,10 @@ class GroqGenerator(Generator):
 
             except Exception as exc:
                 last_exc = exc
-                if effective_prompt is prompt and (
+                if effective_prompt is original_prompt and (
                     self._is_tool_use_glitch(exc) or isinstance(exc, _EmptyCompletion)
                 ):
-                    effective_prompt = prompt + _TOOL_USE_GUARD_SUFFIX
+                    effective_prompt = original_prompt + _TOOL_USE_GUARD_SUFFIX
                     logger.warning(
                         "Groq tool-use/empty glitch (attempt %d/%d): %s — retrying "
                         "with plain-prose guard",
