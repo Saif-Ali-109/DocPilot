@@ -1047,17 +1047,50 @@ Note: Groq's daily TPD is a **rolling 24-hour window**, not a calendar-day reset
 (2026-09-11 evidence: same-org bucket ~99% full midday); a fresh bucket = new
 **organization**, never a same-org re-key.
 
-**Pending:** the hybrid answer-level gate — classic pipeline with
-`HYBRID_ENABLED=1` (2:1 weights), 30 rows, fresh stamp — the last answer-level
-test before `HYBRID_ENABLED` may flip on (retrieval gate: MRR 0.717→0.783,
-recall parity). Runs on the new org's bucket (8k TPM throttling makes runs
-slower but they fit within 200k TPD).
+**Hybrid answer-level gate — COMPLETE 2026-09-12** (classic, `HYBRID_ENABLED=1`,
+weights 2.0/1.0, 30 rows, fresh stamp `20260912_080743`, exit 0, one 8-min run on
+the new org's refreshed bucket; report committed with this section):
+
+| Metric | levers-off baseline `20260910_215240` | hybrid gate `20260912_080743` | Δ |
+|--------|-------------------------------------|------------------------------|---|
+| answer_correctness | 0.8167 (24.5/30) | 0.8333 (25/30) | **+1.7pp** (+0.5 row) |
+| retrieval_recall@k | 0.900 (18/20) | 0.900 (18/20) | 0 (parity) |
+| citation_validity | 1.000 | 1.000 | tie |
+| citation_gold_accuracy | 0.628 (n=13) | 0.610 (n=17) | −1.8pp (wider n) |
+| refusal_accuracy | 1.000 | 1.000 | tie |
+| groundedness_rate | 0.762 (16/21) | 0.667 (14/21) | **−9.5pp** |
+| avg_latency_ms | 11,130 | 12,032 | +902 (+8%) |
+| retrieval/tool calls | 1.0 / 0.0 | 1.0 / 0.0 | tie |
+
+Per-row evidence (only scoring deltas shown):
+- **fixed by hybrid:** bd09 0.5→1.0, bd18 0.5→1.0, bl02 0.0→0.5 (correctness);
+  grounded bd03, bd05 False→True
+- **broken by hybrid:** **bd17 1.0→0.0** (the known recall-miss row — its baseline
+  answer was correct; hybrid's FTS re-ranking displaced the gold chunk order),
+  grounded bd10, bd15, bl04 True→False, bd17 True→None (ungrounded)
+
+**Verdict (evidence-first): `HYBRID_ENABLED` stays OFF — gate NOT passed.**
+Net answer-level change = +0.5 correctness row and −2 groundedness rows at
++8% latency. The retrieval MRR gain (0.717→0.783, §6.5.2) does **not** convert
+into answer-level wins: it fixes bd03/bd05 grounding and two partial rows, but
+regresses grounding elsewhere and — decisively — flips bd17 from a correct
+answer to a failed one (a retrieval-ordering effect, not a judge artifact).
+Same verdict shape as RERANK: retrieval-level gain is necessary, not
+sufficient. Standing decision (2026-09-12): `HYBRID_ENABLED=0` default stays;
+`HYBRID_WEIGHT_VECTOR=2.0`/`LEXICAL=1.0` remain inert sanctioned values;
+revisit only with a new corpus or a corpus-matched tuning pass.
+Caveat recorded: the gate was scored on current code incl. the WI-6 judge-prompt
+split (baseline was scored pre-WI-6); judge drift is possible but smaller than
+the observed gaps — the bd17 regression is a ranking effect, not scoring noise.
+**Net effect for Phase 6: it builds on the levers-off foundation — no lever
+flips pending.
 
 ## 7. phase_6: "Code Generation / Validation"
-- status: PLANNED — gated; **no implementation before the pending hybrid
-  answer-level gate passes and the `HYBRID_ENABLED` decision is made** (see
-  §6.5 "Pending" + §10). This section is the working HOW for that phase, not a
-  license to start it.
+- status: PLANNED — gated; **no implementation before user sign-off to enter
+  the phase** (AGENTS.md rule 3 — never self-enter). The §6.5 gate question is
+  resolved (2026-09-12: `HYBRID_ENABLED` stays OFF — verdict in §6.5); only
+  items 3–4 of §7.1 (sign-off + `current_phase` flip) remain. This section is
+  the working HOW for that phase, not a license to start it.
 - summary (SPEC §8, verbatim scope): >
     Documentation retrieval → generate code → validate against retrieved
     API/schema/examples → return code + sources. Only after the core is
@@ -1067,13 +1100,15 @@ slower but they fit within 200k TPD).
   explicit, opt-in route (SPEC §8 guardrail + AGENTS.md rule 3).
 
 ### 7.1 gate (do before writing any Phase 6 code)
-- [ ] run the hybrid answer-level gate (classic, `HYBRID_ENABLED=1`, 2:1
+- [x] run the hybrid answer-level gate (classic, `HYBRID_ENABLED=1`, 2:1
       weights, 30 rows, fresh stamp) via
       `bash -ic 'bash /tmp/opencode/run_hybrid_gate.sh'` on a fresh TPD bucket
-- [ ] record the before/after answer-level table (correctness, groundedness,
+      — **DONE 2026-09-12** (stamp `20260912_080743`, exit 0, see §6.5)
+- [x] record the before/after answer-level table (correctness, groundedness,
       citation_gold, latency) in §6.5 and DECIDE `HYBRID_ENABLED` on the data
       (recall gate already: MRR 0.717→0.783, recall parity — answer level is
-      the last evidence)
+      the last evidence) — **DONE 2026-09-12: verdict = keep `HYBRID_ENABLED=0`
+      (no net answer-level win; see §6.5 verdict)**
 - [ ] user sign-off to enter Phase 6 (per AGENTS.md rule 3 — never self-enter)
 - [ ] only then: flip PLAN `current_phase` → 6 and cut the `phase-6-start`
       branch/milestone

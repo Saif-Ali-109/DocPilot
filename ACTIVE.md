@@ -16,25 +16,25 @@ last_updated: 2026-09-11
 
 ## 1. Status
 
-- current_phase: **pre-Phase-6 hardening gate** (Phase 5 COMPLETE). Phase 6
-  (code gen/validation) is PLANNED and gated — implementation waits for the
-  hybrid gate below (PLAN §7).
-- last_updated: 2026-09-11
+- current_phase: **pre-Phase-6 sign-off** (Phase 5 COMPLETE). The §6.5 gate
+  question is decided (`HYBRID_ENABLED` stays OFF — verdict PLAN §6.5); Phase 6
+  waits only on user sign-off (AGENTS.md rule 3 → PLAN §7.1 items 3–4).
+- last_updated: 2026-09-12
 - servers: uvicorn :8000 (`/api/v1/health` — store ok, ~15.3k chunks),
   chainlit :8050 — keep both healthy.
-- test baseline: 472 passing (Phase 1–5 suites).
+- test baseline: 481 passing (Phase 1–5 suites + WI batch).
 
-### Active gate (the only thing blocking Phase 6)
+### Gate status (resolved 2026-09-12)
 
-- **Hybrid answer-level gate** — classic pipeline, `HYBRID_ENABLED=1`,
-  weights 2.0 vector / 1.0 lexical, 30 rows, fresh stamp. The last
-  answer-level test before `HYBRID_ENABLED` may flip on.
-  Run: `bash -ic 'bash /tmp/opencode/run_hybrid_gate.sh'` on a fresh 200k TPD
-  bucket. **Blocked**: current org's bucket is nearly full (TPD = rolling
-  24 h window — see §2).
-- After it passes: decide `HYBRID_ENABLED` on the data (retrieval gate
-  already passed: MRR 0.717→0.783, recall parity; verdict + tables → PLAN
-  §6.5.3). Then user sign-off to enter Phase 6.
+- **Hybrid answer-level gate COMPLETE** — stamp `20260912_080743`, exit 0, one
+  8-min run on the refreshed bucket: correctness +1.7pp (25/30), groundedness
+  −9.5pp (16→14/21), citation_gold −1.8pp (n 13→17), latency +8%; bd17 flipped
+  1.0→0.0 (hybrid re-ranking displaced its gold chunk). Full table + verdict →
+  PLAN §6.5.
+- **Decision: `HYBRID_ENABLED` stays OFF** — no net answer-level win; same
+  verdict shape as RERANK (retrieval gain ≠ answer-level gain).
+- Blocking Phase 6 now: **only your sign-off** (AGENTS.md rule 3). Then
+  `current_phase` → 6 + `phase-6-start` milestone (§7.1 items 3–4).
 
 ## 2. Contract constants
 
@@ -72,6 +72,8 @@ last_updated: 2026-09-11
 - Harness hardening (TPD clean-exit + row-level checkpoints in the eval
   harness) DONE — exit code 3 on daily-quota wall, resume skips checkpointed
   rows, full-set report preserved.
+- Hybrid gate DONE 2026-09-12 — verdict `HYBRID_ENABLED` stays OFF (evidence
+  in §1 + PLAN §6.5); reports committed (stamp `20260912_080743`).
 - Allowed while gated: retrieval/test/docs work + planning only — no Phase 6
   implementation, no lever flips.
 
