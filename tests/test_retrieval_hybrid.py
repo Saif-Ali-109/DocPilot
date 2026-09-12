@@ -109,6 +109,7 @@ class _FakeCursor:
     def __init__(self, rows) -> None:
         self.rows = rows
         self.executed_sql: str | None = None
+        self.executed_params: list | None = None
 
     def __enter__(self):
         return self
@@ -118,6 +119,7 @@ class _FakeCursor:
 
     def execute(self, sql, params=None) -> None:
         self.executed_sql = sql
+        self.executed_params = params
 
     def fetchall(self):
         return self.rows
@@ -164,6 +166,29 @@ class TestPostgresFTSSearcher:
         sql = conn.cursor().executed_sql
         assert "AND language = %s" in sql
         assert "LIMIT %s" in sql
+
+    def test_invalid_fts_config_raises_value_error(self) -> None:
+        with pytest.raises(ValueError, match="fts_config"):
+            PostgresFTSSearcher(_FakeConn([]), fts_config="main; DROP TABLE chunks")
+
+    def test_fts_config_bound_as_parameter_not_interpolated(self) -> None:
+        """regconfig travels as %s::regconfig; no quoted config in SQL text."""
+        conn = _FakeConn([])
+        searcher = PostgresFTSSearcher(conn, fts_config="simple")
+        searcher.search("query terms", top_k=3, language="en")
+        cursor = conn.cursor()
+        sql = cursor.executed_sql
+        # Parameterized form for every regconfig use:
+        assert "to_tsvector(%s::regconfig, content)" in sql
+        assert "to_tsquery(%s::regconfig, %s)" in sql
+        assert sql.count("%s::regconfig") == 4  # vector+query in SELECT and WHERE
+        # The literal config never appears quoted in the SQL text...
+        assert "'simple'" not in sql
+        assert "'english'" not in sql
+        # ...because it is bound as a parameter (2 per tsvector/tsquery pair).
+        params = cursor.executed_params
+        assert sum(1 for p in params if p == "simple") == 4
+        assert params[-2:] == ["en", 3]  # language + LIMIT still follow
 
     @pytest.mark.integration
     def test_fts_against_real_postgres(self) -> None:
