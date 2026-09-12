@@ -32,3 +32,6 @@ data/
 src/docpilot/eval/reports/benchmark_20260908_184441*.json
 src/docpilot/eval/reports/benchmark_20260912_082131*.json
 src/docpilot/eval/reports/benchmark_20260912_083701*
+# Transient eval checkpoint fragments (intermediate row buffers); the
+# completed report is a .json committed as evidence.
+*.rows.jsonl

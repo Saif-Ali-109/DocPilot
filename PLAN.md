@@ -1182,22 +1182,42 @@ flips pending.
 
 ### 7.5 exit_criteria (checked when the phase closes — mirror §6.3 style)
 
-- [ ] `CodeValidator` returns pass/fail + reasons with no hallucinated
-      "fine" — structural checks are deterministic; LLM judge only for
-      semantic fit
-- [ ] code route is explicit and opt-in; non-code queries never produce a
+- [x] `CodeValidator` returns pass/fail + reasons with no hallucinated
+      "fine" — structural checks are deterministic (T1: parse → imports
+      grounded → symbols grounded, fully hermetic, `SKIP ≠ validate`); no
+      LLM judge is wired in, so nothing can paper over a leftover check
+- [x] code route is explicit and opt-in; non-code queries never produce a
       code answer; the fast/cheap path is byte-identical for non-code asks
-- [ ] unvalidated code is never returned — persistent validation failure →
+      (T3/T6: per-request `explicit_code`, `POST /api/v1/code`, Chainlit
+      per-session toggle; lever `CODE_ROUTE_ENABLED` default 0; gated-off
+      dispatches fall back to the untouched `ask()` path)
+- [x] unvalidated code is never returned — persistent validation failure →
       refusal-style "couldn't validate" with sources, never fabricated code
-- [ ] generated code carries citations resolving to real doc pages (existing
-      `CitationEngine` output, no new marker syntax)
-- [ ] Phase 4–5 suite + new T1/T2/T4/T5 tests green (the current 472 baseline
-      + additions)
-- [ ] a code-focused eval run exists in `src/docpilot/eval/reports/` with
+      (T4 loop + `refuse_code` → `VALIDATION_REFUSAL` + retrieved sources;
+      failed candidate stays attached to the `CodeRequest` for the debug
+      layer)
+- [x] generated code carries citations resolving to real doc pages (existing
+      `CitationEngine` output, no new marker syntax — `ask_code` reuses
+      `StandardCitationEngine.format_answer`; footers resolve to
+      `en/docs/tutorial/...` pages, verified in the T4/T6 tests)
+- [x] Phase 4–5 suite + new T1/T2/T4/T5 tests green (full suite 550 passed
+      as of T6, 2026-09-12 — includes T7 code-validation tests, the T4 loop
+      tests and the 17 T5 eval tests)
+- [x] a code-focused eval run exists in `src/docpilot/eval/reports/` with
       validation-pass rate + citation accuracy; compared against the
       non-code baseline where overlap exists
-- [ ] README/pitch honest: Phase 6 described only to the extent implemented
+      — `code_benchmark_20260912_codefix.json` (6 rows, committed): validation
+      pass 0.75 (3/4 validation-attempted; c05 correctly refused on
+      persistent failure), compiles 1.0, imports/symbols grounded 0.75,
+      citation-gold 0.333 (1/3 marker rows), refusal accuracy 0.833 (c03
+      false coverage refusal), avg 1.67 validation turns, ~11.4 s/predict;
+      citation_gold uses the main benchmark's marker→source logic (comparable
+      on the code rows with markers)
+- [x] README/pitch honest: Phase 6 described only to the extent implemented
       (SPEC §8: not a differentiator until it's built)
+      — README status + scope + phase table updated: opt-in code route,
+      validation-or-refusal semantics, eval stamp + rates as of 2026-09-12;
+      no claims beyond the measured T1–T6 surface
 
 ### 7.6 non-scope / deferred (decide later, not now)
 

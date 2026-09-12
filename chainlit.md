@@ -1,9 +1,9 @@
 ---
 title: DocPilot — Chainlit UI
-role: Phase 5 UI dev notes (Chainlit app)
+role: Phase 5/6 UI dev notes (Chainlit app)
 authority: none — informational
 load: on-demand — only when touching the Chainlit app
-last_updated: 2026-09-09
+last_updated: 2026-09-12
 ---
 
 # DocPilot
@@ -22,3 +22,8 @@ hallucinating.
 - 💬 **Streaming** — the answer streams token-by-token (first token in seconds
   on the fast path).
 - 📚 **Citations** — numbered inline markers resolve to a source footer.
+- 💻 **Ask for code (Phase 6, opt-in)** — tick *Generate validated code* in the
+  settings panel: the response runs the code route (retrieve → generate →
+  validate against the retrieved docs → return only validated code, else
+  refuse with sources); each attempt's validation verdict renders as a trace
+  step.

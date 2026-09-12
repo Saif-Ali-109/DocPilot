@@ -1,0 +1,161 @@
+{
+  "pipeline": "code",
+  "dataset_path": "/home/ain/Desktop/RAG/src/docpilot/eval/dataset/code_benchmark.json",
+  "generated_at": "2026-09-12T10:23:21",
+  "note": "code eval over 6 request(s); citation_gold_accuracy uses the main benchmark's marker\u2192source logic (comparable over overlap)",
+  "metrics": {
+    "validation_pass_rate": 0.75,
+    "validation_n": 4,
+    "compiles_rate": 1.0,
+    "imports_grounded_rate": 0.75,
+    "surface_grounded_rate": 0.75,
+    "gold_surface_usage": 0.875,
+    "gold_import_usage_rate": 1.0,
+    "citation_gold_accuracy": 0.3333,
+    "citation_n": 3,
+    "refusal_accuracy": 0.8333,
+    "refusal_n": 6,
+    "avg_validation_turns": 1.667,
+    "avg_latency_ms": 11355.3
+  },
+  "rows": [
+    {
+      "id": "c01",
+      "refused": false,
+      "validation_pass": true,
+      "compiles": true,
+      "imports_grounded": true,
+      "surface_grounded": true,
+      "used_gold_surface": 1.0,
+      "used_gold_imports": true,
+      "citation_gold_accuracy": 1.0,
+      "marker_count": 1,
+      "validation_turns": 1,
+      "latency_ms": 15245.1,
+      "refusal_ok": true,
+      "answer": "[1]\n```python\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/\")\ndef root():\n    return {\"message\": \"Hello, World!\"}\n```\n\nThis snippet follows the FastAPI \u201cfirst steps\u201d tutorial: it imports `FastAPI`, creates an `app` instance, decorates a function with `@app.get(\"/\")` to handle GET requests at the root path, and returns a simple JSON response. The structure mirrors the example described in the documentation.\n\nSources:\n[1] en/docs/tutorial/first-steps.md \u2192 /First Steps/Recap",
+      "source_files": [
+        "en/docs/tutorial/first-steps.md",
+        "en/docs/fastapi-cli.md",
+        "en/docs/tutorial/first-steps.md",
+        "en/docs/advanced/behind-a-proxy.md",
+        "en/docs/advanced/behind-a-proxy.md"
+      ]
+    },
+    {
+      "id": "c02",
+      "refused": false,
+      "validation_pass": true,
+      "compiles": true,
+      "imports_grounded": true,
+      "surface_grounded": true,
+      "used_gold_surface": 1.0,
+      "used_gold_imports": true,
+      "citation_gold_accuracy": 0.0,
+      "marker_count": 3,
+      "validation_turns": 1,
+      "latency_ms": 8703.8,
+      "refusal_ok": true,
+      "answer": "[1]  \n```python\nfrom fastapi import FastAPI, Query\n\napp = FastAPI()\n\n# The query parameter `q` is optional.\n# By setting `default=None` we give it a default value of `None`,\n# so the endpoint works even when the client does not supply `q`.\n@app.get(\"/items/\")\nasync def read_items(q: str | None = Query(default=None)):\n    return {\"q\": q}\n```\n\nThis example uses **FastAPI**\u2019s `Query` function to declare a query parameter (`q`) with a default value of `None`.  \nWhen a request like `GET /items/?q=hello` is made, the response will be `{\"q\": \"hello\"}`; if the query parameter is omitted, the response will be `{\"q\": null}`.\n\n---\n\n[1]  \n```python\nfrom fastapi import FastAPI, Query\n\napp = FastAPI()\n\n# The query parameter `q` has a non\u2011null default value.\n# If the client does not provide `q`, FastAPI will use `\"all\"` instead.\n@app.get(\"/search/\")\nasync def search_items(q: str = Query(default=\"all\")):\n    return {\"q\": q}\n```\n\nHere the query parameter `q` is required to be a string, but it has a default value of `\"all\"`.  \nA request to `GET /search/` returns `{\"q\": \"all\"}`, while `GET /search/?q=fastapi` returns `{\"q\": \"fastapi\"}`.  \n\nBoth snippets demonstrate how to read a query parameter with a default value in FastAPI, following the documented usage of `Query`\u202f[1].\n\nSources:\n[1] en/docs/tutorial/query-params-str-validations.md \u2192 /Query Parameters and String Validations/Alternative (old): `Query` as the default value",
+      "source_files": [
+        "en/docs/tutorial/query-params-str-validations.md",
+        "en/docs/tutorial/query-params.md",
+        "en/docs/tutorial/body.md",
+        "en/docs/tutorial/query-params-str-validations.md",
+        "en/docs/release-notes.md"
+      ]
+    },
+    {
+      "id": "c03",
+      "refused": true,
+      "validation_pass": null,
+      "compiles": null,
+      "imports_grounded": null,
+      "surface_grounded": null,
+      "used_gold_surface": null,
+      "used_gold_imports": null,
+      "citation_gold_accuracy": null,
+      "marker_count": 0,
+      "validation_turns": 1,
+      "latency_ms": 8489.2,
+      "refusal_ok": false,
+      "answer": "I don't know \u2014 the available documentation does not cover this question.",
+      "source_files": [
+        "en/docs/release-notes.md",
+        "en/docs/advanced/dataclasses.md",
+        "en/docs/advanced/response-directly.md",
+        "en/docs/advanced/additional-responses.md",
+        "en/docs/advanced/custom-response.md"
+      ]
+    },
+    {
+      "id": "c04",
+      "refused": false,
+      "validation_pass": true,
+      "compiles": true,
+      "imports_grounded": true,
+      "surface_grounded": true,
+      "used_gold_surface": 0.5,
+      "used_gold_imports": true,
+      "citation_gold_accuracy": 0.0,
+      "marker_count": 3,
+      "validation_turns": 3,
+      "latency_ms": 14834.9,
+      "refusal_ok": true,
+      "answer": "[5]  \n```python\nfrom fastapi import FastAPI\n\n# A custom ASGI middleware class.\n# It receives the downstream ASGI app as the first argument (per ASGI spec).\nclass MyMiddleware:\n    def __init__(self, app, prefix: str = \"\"):\n        self.app = app\n        self.prefix = prefix\n\n    async def __call__(self, scope, receive, send):\n        # Example: prepend a prefix to the request path before it reaches the app.\n        if scope[\"type\"] == \"http\":\n            original_path = scope[\"path\"]\n            scope[\"path\"] = f\"{self.prefix}{original_path}\"\n        # Call the next app (or next middleware) in the chain.\n        await self.app(scope, receive, send)\n\n\napp = FastAPI()\n\n# Register the custom middleware with FastAPI.\n# `add_middleware` takes the middleware class and any extra arguments for it.\napp.add_middleware(MyMiddleware, prefix=\"/api\")\n```\n\n**Explanation:**  \nThe code defines a custom ASGI middleware class (`MyMiddleware`) that conforms to the ASGI specification by accepting the downstream app in `__init__` and implementing an async `__call__` method\u202f\u2014\u202fas described in source\u202f[5]. The middleware is then attached to a `FastAPI` instance using `app.add_middleware`, passing the class and a configuration argument (`prefix`), which follows the usage pattern shown in source\u202f[5].\n\nSources:\n[5] en/docs/advanced/middleware.md \u2192 /Advanced Middleware/Adding ASGI middlewares",
+      "source_files": [
+        "en/docs/tutorial/middleware.md",
+        "en/docs/tutorial/bigger-applications.md",
+        "en/docs/advanced/openapi-callbacks.md",
+        "en/docs/how-to/extending-openapi.md",
+        "en/docs/advanced/middleware.md"
+      ]
+    },
+    {
+      "id": "c05",
+      "refused": false,
+      "validation_pass": false,
+      "compiles": true,
+      "imports_grounded": false,
+      "surface_grounded": false,
+      "used_gold_surface": 1.0,
+      "used_gold_imports": true,
+      "citation_gold_accuracy": null,
+      "marker_count": 0,
+      "validation_turns": 3,
+      "latency_ms": 12955.9,
+      "refusal_ok": true,
+      "answer": "I couldn't validate the generated code against the retrieved documentation, so I'm not returning code.\n\nSources:\n[1] en/docs/reference/background.md (reference) \u2192 /Background Tasks - `BackgroundTasks`\n[2] en/docs/tutorial/background-tasks.md (tutorial) \u2192 /Background Tasks\n[3] en/docs/tutorial/background-tasks.md (tutorial) \u2192 /Background Tasks/Technical Details\n[4] en/docs/tutorial/background-tasks.md (tutorial) \u2192 /Background Tasks/Create a task function\n[5] en/docs/tutorial/background-tasks.md (tutorial) \u2192 /Background Tasks/Dependency Injection",
+      "source_files": [
+        "en/docs/reference/background.md",
+        "en/docs/tutorial/background-tasks.md",
+        "en/docs/tutorial/background-tasks.md",
+        "en/docs/tutorial/background-tasks.md",
+        "en/docs/tutorial/background-tasks.md"
+      ]
+    },
+    {
+      "id": "c06",
+      "refused": true,
+      "validation_pass": null,
+      "compiles": null,
+      "imports_grounded": null,
+      "surface_grounded": null,
+      "used_gold_surface": null,
+      "used_gold_imports": null,
+      "citation_gold_accuracy": null,
+      "marker_count": 0,
+      "validation_turns": 1,
+      "latency_ms": 7902.7,
+      "refusal_ok": true,
+      "answer": "I don't know \u2014 the available documentation does not cover this question.",
+      "source_files": [
+        "en/docs/tutorial/body-nested-models.md",
+        "en/docs/tutorial/request-form-models.md",
+        "en/docs/advanced/custom-response.md",
+        "en/docs/tutorial/sql-databases.md",
+        "en/docs/tutorial/path-params.md"
+      ]
+    }
+  ]
+}

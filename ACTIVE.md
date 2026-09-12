@@ -16,14 +16,14 @@ last_updated: 2026-09-11
 
 ## 1. Status
 
-- current_phase: **6 — Code Generation / Validation, IN PROGRESS** (entered
-  2026-09-12, user sign-off; milestone `phase-6-start` cut). §6.5 gate
-  resolved: `HYBRID_ENABLED` stays OFF — Phase 6 builds on the levers-off
-  foundation.
+- current_phase: **6 — Code Generation / Validation, COMPLETE** (entered
+  2026-09-12; milestone `phase-6-start` → `phase-6` cut on exit-criteria
+  sweep). §6.5 gate resolved: `HYBRID_ENABLED` stays OFF — Phase 6 built on
+  the levers-off foundation.
 - last_updated: 2026-09-12
-- servers: uvicorn :8000 (`/api/v1/health` — store ok, ~15.3k chunks),
-  chainlit :8050 — keep both healthy.
-- test baseline: 481 passing (Phase 1–5 suites + WI batch).
+- servers: uvicorn :8000 (`/api/v1/health` — store ok, ~15.3k chunks; serves
+  `POST /api/v1/code`), chainlit :8050 — keep both healthy.
+- test baseline: 550 passing (Phase 1–5 suites + WI batch + T1–T7).
 
 ### Gate status (resolved 2026-09-12)
 
@@ -44,7 +44,8 @@ last_updated: 2026-09-11
   metrics, 17 tests); **T6 DONE** (API/UI — `POST /api/v1/code` streaming
   route + `service.code_events` with the new `code` validation-verdict
   event, Chainlit *Generate validated code* settings toggle, 11 tests);
-  next: §7.5 exit-criteria sweep + `phase-6` tag.
+  §7.5 exit-criteria sweep COMPLETE (2026-09-12);
+  `phase-6` tag cut.
 
 ## 2. Contract constants
 
@@ -84,13 +85,20 @@ last_updated: 2026-09-11
   rows, full-set report preserved.
 - Hybrid gate DONE 2026-09-12 — verdict `HYBRID_ENABLED` stays OFF (evidence
   in §1 + PLAN §6.5); reports committed (stamp `20260912_080743`).
-- Phase 6 ACTIVE (sign-off 2026-09-12): T7 + T1 DONE (`CodeValidator`
-  hermetic, 16 tests); T2 DONE (`ask_code` codegen pipeline, 6 tests); T3
-  DONE (opt-in code dispatch + verdict wiring, 14 tests); T4 DONE
-  (validation loop + cap + refusal-with-sources, 5 tests); next T5 code eval
-  rows + T6 API/UI (PLAN §7.3). Levers stay OFF (gate verdict).
-- Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF), Phase 6
-  signed off. No other open gates; levers stay OFF permanently on this corpus.
+- Code eval `20260912_codefix` COMPLETE — report
+  `src/docpilot/eval/reports/code_benchmark_20260912_codefix.json`
+  (6 rows, committed as evidence): validation-pass 0.75, compiles 1.0,
+  citation-gold 0.333, refusal accuracy 0.833, avg 1.7 validation turns,
+  ~11.4 s/row (live-run budget TPD-rolled-off; every row retried until
+  scored).
+- Main-benchmark resume stamp `20260912_102852` COMPLETE — classic +
+  agentic reports written (`benchmark_20260912_102852*.json`); clean
+  stamp, not a forbidden partial run.
+- Phase 6 COMPLETE — §7.5 exit-criteria sweep passed and `phase-6` tag
+  cut; T1–T6 done (see §1 gate status). Levers stay OFF (gate verdict).
+- Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
+  Phase 6 signed off AND exited (§7.5 sweep + tag). No other open gates;
+  levers stay OFF permanently on this corpus.
 
 ## 4. Load index — read ONLY these SPEC/PLAN lines
 
@@ -107,10 +115,10 @@ Core (always) + current-phase bundle; all other rows on demand.
 | SPEC.md | §8 Phase 6 outline | 736–748 | Phase 6 planning |
 | PLAN.md | §1 meta | 11–34 | core — always |
 | PLAN.md | §6.5 pre-Phase-6 hardening evidence | 915–1055 | current-phase |
-| PLAN.md | §7 Phase 6 plan (gated) | 1056–1142 | current-phase |
-| PLAN.md | §9 architectural discipline | 1149–1171 | core — always |
-| PLAN.md | §10 conflict resolution | 1172–1182 | core — always |
-| PLAN.md | §11 git_workflow | 1183–1211 | core — always |
+| PLAN.md | §7 Phase 6 plan (gated) incl. §7.5 exit criteria | 1088–1230 | current-phase |
+| PLAN.md | §9 architectural discipline | 1237–1259 | core — always |
+| PLAN.md | §10 conflict resolution | 1260–1270 | core — always |
+| PLAN.md | §11 git_workflow | 1271–1299 | core — always |
 | SPEC.md | §3–§5 locked phase details | 48–572 | on-demand: task touches that phase's code (classic RAG / agent / tooling) |
 | PLAN.md | §2–§5 completed-phase history | 35–913 | on-demand: same rule (incl. §5.3 eval slices, §6 API/UI) |
 
