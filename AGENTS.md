@@ -48,7 +48,7 @@ This is also the learning/validation project for a future reusable RAG framework
 
 Design around clean interfaces so components are swappable later, even though only one implementation of each exists now. Do not hard-code call sites to a specific vendor/library where an interface should exist instead:
 
-- `DocumentLoader`, `Parser`, `Chunker`, `EmbeddingProvider`, `VectorStore`, `Retriever`, `Reranker`, `Tool`, `Agent`, `Generator`, `CitationEngine`, `Evaluator`
+- `DocumentLoader`, `Parser`, `Chunker`, `EmbeddingProvider`, `VectorStore`, `Retriever`, `Reranker`, `Tool`, `Agent`, `Generator`, `CitationEngine`, `Evaluator`, `CodeValidator` (Phase 6, PLAN §7.2 T1)
 
 Concretely: don't sprinkle `groq.chat(...)` or `qdrant_client.search(...)` calls directly through business logic — put them behind the relevant interface, even if there's only one backend today. This is what will let BGE/Qdrant/Groq/LangGraph get swapped out later without a rewrite.
 

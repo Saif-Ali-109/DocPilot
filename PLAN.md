@@ -1089,6 +1089,10 @@ flips pending.
 - status: IN PROGRESS — entered 2026-09-12 (user sign-off per AGENTS.md rule
   3; milestone `phase-6-start` cut). §6.5 gate question resolved same day:
   `HYBRID_ENABLED` stays OFF — Phase 6 builds on the levers-off foundation.
+- progress (per §7.3 order): **T7 + T1 DONE 2026-09-12** — `CodeValidator`
+  interface + `RetrieveThenValidate` (parse → imports grounded → symbols
+  grounded, fully hermetic) + fixture corpus (`tests/fixtures/codegen`) + 16
+  tests; next: T2 codegen path behind `Generator`/`CitationEngine`.
 - summary (SPEC §8, verbatim scope): >
     Documentation retrieval → generate code → validate against retrieved
     API/schema/examples → return code + sources. Only after the core is
