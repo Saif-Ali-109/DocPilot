@@ -1283,8 +1283,12 @@ flips pending.
       SPEC/PLAN/ACTIVE trio + README pointer (derived from DocPilot's docs),
       so the framework is self-explanatory to new agents/people; DocPilot's
       docs remain authoritative here
-- [ ] S1-T2: move the §8.2 modules mechanically (prefix swap
+- [x] S1-T2: move the §8.2 modules mechanically (prefix swap
       `docpilot.` → `ragkit.`); move their unit tests into `ragkit/tests/`
+      — DONE 2026-09-17: 16 modules + `db/schema.sql` + 11 unit tests moved;
+      reverse-swap diff byte-mechanical; ragkit moved suite green in the
+      DocPilot venv (182 passed, 1 skipped — hermetic skips). venv `.pth`
+      editable paths re-pointed to current repo locations.
 - [ ] S1-T3: DocPilot dogfood: add ragkit dep to pyproject (git pin), rewire
       imports in `pipeline_ask.py` / `pipeline_ingest.py` (+ any other refs),
       delete the moved modules from `src/docpilot/`, grep-verify zero imports

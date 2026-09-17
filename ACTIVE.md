@@ -113,8 +113,10 @@ last_updated: 2026-09-17
   off (separate repo https://github.com/Saif-Ali-109/ragkit.git, dogfood,
   staged core-first, no CI/PyPI this phase). S1-T1 DONE (repo scaffolded +
   pushed + editable-installed into the DocPilot venv); S1-T1b DONE (ragkit
-  self-docs — SPEC/PLAN/ACTIVE trio + README pointer). Next: §8.3 S1-T2 move
-  the core-chain modules (`docpilot.` → `ragkit.` prefix swap).
+  self-docs — SPEC/PLAN/ACTIVE trio + README pointer). S1-T2 DONE (moved
+  the §8.2 core-chain modules + unit tests into ragkit, mechanical prefix
+  swap; moved suite green in the DocPilot venv — 182 passed, 1 skipped).
+  Next: §8.3 S1-T3 DocPilot rewire (imports → ragkit, delete moved modules).
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
   WI-1 judge-skip gate decided (threshold 0.0 locked), Phase 6 signed off
   AND exited (§7.5 sweep + tag). No other open gates; levers stay OFF
