@@ -161,7 +161,8 @@ async def on_message(message: cl.Message) -> None:
             validation_failed = bool(item.get("validation_failed"))
 
         elif event_type == "done":
-            pass  # finalize below
+            # Capture token usage from the final event
+            final_usage = item.get("usage")
 
         elif event_type == "error":
             await answer_msg.update()
@@ -177,6 +178,15 @@ async def on_message(message: cl.Message) -> None:
     # they are the evidence for why no code was returned.
     if final_text:
         answer_msg.content = final_text
+        # Append token usage if available
+        if final_usage:
+            usage_line = (
+                f"\n\n---\n📊 **Tokens**: "
+                f"{final_usage.get('prompt_tokens', 0):,} prompt + "
+                f"{final_usage.get('completion_tokens', 0):,} completion = "
+                f"**{final_usage.get('total_tokens', 0):,} total**"
+            )
+            answer_msg.content += usage_line
         await answer_msg.update()
         if final_sources and (not refused or validation_failed):
             await _show_sources(final_sources)

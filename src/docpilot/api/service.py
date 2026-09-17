@@ -498,7 +498,7 @@ def code_events(
     emit = emit or _noop
     started = time.perf_counter()
 
-    if generator is None and model is not None:
+    if generator is None:
         from docpilot.generation.generator import GroqGenerator
 
         generator = GroqGenerator(model=model)
