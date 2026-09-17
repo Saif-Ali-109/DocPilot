@@ -3,7 +3,7 @@ title: DocPilot — ACTIVE current view
 role: derived current view — phase, gates, constants, load index
 authority: lowest — fix ACTIVE if it contradicts SPEC/PLAN
 load: read whole — the only file meant to be read whole
-last_updated: 2026-09-12
+last_updated: 2026-09-17
 ---
 
 # ACTIVE — DocPilot current view (derived, never authoritative)
@@ -16,11 +16,13 @@ last_updated: 2026-09-12
 
 ## 1. Status
 
-- current_phase: **6 — Code Generation / Validation, COMPLETE** (entered
-  2026-09-12; milestone `phase-6-start` → `phase-6` cut on exit-criteria
-  sweep). §6.5 gate resolved: `HYBRID_ENABLED` stays OFF — Phase 6 built on
-  the levers-off foundation.
-- last_updated: 2026-09-12
+- current_phase: **7 — Framework Extraction (ragkit), ACTIVE** (entered
+  2026-09-17; milestone `phase-7-start` → `phase-7` per PLAN §8.5). Phase 6
+  remains COMPLETE (phase-6 tag cut 2026-09-12); extraction is the final step
+  of the SPEC §2 build order. Decisions 2026-09-17: separate ragkit repo,
+  DocPilot dogfoods ragkit, core chain first, installable-no-CI. Stage 1 per
+  PLAN §8.3.
+- last_updated: 2026-09-17
 - servers: uvicorn :8000 (`/api/v1/health` — store ok, ~15.3k chunks; serves
   `POST /api/v1/code`), chainlit :8050 — keep both healthy.
 - test baseline: 550 passing (Phase 1–5 suites + WI batch + T1–T7).
@@ -107,6 +109,9 @@ last_updated: 2026-09-12
   scored).
 - Phase 6 COMPLETE — §7.5 exit-criteria sweep passed and `phase-6` tag
   cut; T1–T6 done (see §1 gate status). Levers stay OFF (gate verdict).
+- Phase 7 ACTIVE 2026-09-17 — framework extraction (ragkit): PLAN §8 signed
+  off (separate repo https://github.com/Saif-Ali-109/ragkit.git, dogfood,
+  staged core-first, no CI/PyPI this phase). Next: §8.3 S1-T1 scaffold ragkit.
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
   WI-1 judge-skip gate decided (threshold 0.0 locked), Phase 6 signed off
   AND exited (§7.5 sweep + tag). No other open gates; levers stay OFF
@@ -126,11 +131,12 @@ Core (always) + current-phase bundle; all other rows on demand.
 | SPEC.md | §6.5 Live-run protocol & quota | 665–707 | gate/eval work |
 | SPEC.md | §8 Phase 6 outline | 736–748 | Phase 6 planning |
 | PLAN.md | §1 meta | 11–34 | core — always |
-| PLAN.md | §6.5 pre-Phase-6 hardening evidence | 915–1055 | current-phase |
-| PLAN.md | §7 Phase 6 plan (gated) incl. §7.5 exit criteria | 1088–1230 | current-phase |
-| PLAN.md | §9 architectural discipline | 1237–1259 | core — always |
-| PLAN.md | §10 conflict resolution | 1260–1270 | core — always |
-| PLAN.md | §11 git_workflow | 1271–1299 | core — always |
+| PLAN.md | §6.5 pre-Phase-6 hardening evidence | 915–1087 | on-demand: Phase-6 evidence |
+| PLAN.md | §7 Phase 6 plan (gated) incl. §7.5 exit criteria | 1088–1229 | on-demand: completed-phase history |
+| PLAN.md | §8 framework extraction (Stage 1 core chain) | 1231–1323 | current-phase — always |
+| PLAN.md | §9 architectural discipline | 1324–1346 | core — always |
+| PLAN.md | §10 conflict resolution | 1348–1358 | core — always |
+| PLAN.md | §11 git_workflow | 1359–1391 | core — always |
 | SPEC.md | §3–§5 locked phase details | 48–572 | on-demand: task touches that phase's code (classic RAG / agent / tooling) |
 | PLAN.md | §2–§5 completed-phase history | 35–913 | on-demand: same rule (incl. §5.3 eval slices, §6 API/UI) |
 
@@ -142,8 +148,10 @@ section heading and read that section's lines instead — then refresh this tabl
 
 `DocumentLoader`, `Parser`, `Chunker`, `EmbeddingProvider`, `VectorStore`,
 `Retriever`, `Reranker`, `Tool`, `Agent`, `Generator`, `CitationEngine`,
-`Evaluator` — never hard-code vendor/library calls behind them (no sprinkling
-`groq.chat(...)` / `pgvector.search(...)` through business logic).
+`Evaluator`, `CodeValidator` — never hard-code vendor/library calls behind
+them (no sprinkling `groq.chat(...)` / `pgvector.search(...)` through
+business logic). Phase 7 (PLAN §8): these move into the `ragkit` package;
+DocPilot imports ragkit (dogfood).
 
 ## 6. Refresh rules (maintain this file)
 

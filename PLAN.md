@@ -1229,10 +1229,97 @@ flips pending.
   (AGENTS.md build-order rule 1)
 
 ## 8. framework_extraction
-- status: PLANNED (post-Phase 6)
+- status: ACTIVE (entered 2026-09-17; milestone `phase-7-start` → `phase-7`
+  cut when §8.5 is all `[x]`)
+- repo: https://github.com/Saif-Ali-109/ragkit.git — NEW separate repo (branch
+  main). The framework is NOT a DocPilot subpackage. DocPilot depends on it
+  and dogfoods it.
 - summary: >
-    Extract reusable components (interfaces, orchestration, eval harness) into
-    a standalone SDK. Only after DocPilot works end-to-end and is evaluated.
+    Extract DocPilot's reusable components into ragkit, a standalone RAG
+    framework package, then rewire DocPilot to import ragkit (dogfood).
+    Extraction is validated by DocPilot's existing behaviors staying intact
+    (full suite green + retrieval parity) — not by new claims. Staged: core
+    chain first, then agentic layer, eval harness, codegen.
+
+### 8.1 principles
+- extraction is a REFACTOR, not a feature phase — zero behavior change in
+  DocPilot; no "improving" code while moving it (improvements = follow-ups).
+- package layout mirrors source so moves are mechanical:
+  `docpilot.<sub>.<mod>` → `ragkit.<sub>.<mod>` — import swap = prefix only.
+- per-stage gate: DocPilot's full pytest suite green + retrieval parity
+  against pre-extraction results BEFORE the next stage starts.
+- dogfood is mandatory (decision 2026-09-17): DocPilot imports ragkit; no
+  copied/duplicated modules left in DocPilot; no re-export shims.
+
+### 8.2 scope (Stage 1 — core chain, "ragkit core", THIS phase)
+- move into ragkit (mechanical, prefix swap):
+  - `ingestion/{loader,parser,chunker,fastapi_loader}.py` — DocumentLoader /
+    Parser / Chunker
+  - `embeddings/provider.py` — EmbeddingProvider (BGE)
+  - `retrieval/{vector_store,lexical,retriever,hybrid}.py` — VectorStore
+    (PgVectorStore) + Retriever
+  - `reranking/reranker.py` — Reranker interface (lever stays OFF)
+  - `generation/{generator,prompts}.py` — Generator (Groq)
+  - `citations/engine.py` — CitationEngine
+  - `core/{models,direct}.py` — core types + direct orchestration
+  - `db/connection.py` — pgvector connection layer (moves with the store)
+- stays in DocPilot (app glue): `pipeline_ask.py`, `pipeline_ingest.py`,
+  `config.py`, `cli.py`, `__main__.py`, `api/*`, `ui/*`,
+  `db/maintenance.py` (homing decided at S1.3).
+- ragkit pyproject: uv_build backend, python >=3.13, CPU-torch index (same
+  `[[tool.uv.index]]` + `[tool.uv.sources]` pattern as DocPilot); deps:
+  psycopg[binary], pgvector, sentence-transformers, groq, requests;
+  dev: pytest, pytest-cov. NO chainlit / fastapi / langgraph in Stage 1 —
+  app and agent deps stay DocPilot-side until their stage moves.
+
+### 8.3 tasks (Stage 1 — execution order)
+- [ ] S1-T1: scaffold ragkit repo: `src/ragkit/` layout, pyproject.toml,
+      .gitignore, minimal README; `chore: scaffold ragkit`; editable install
+      into the DocPilot venv
+- [ ] S1-T2: move the §8.2 modules mechanically (prefix swap
+      `docpilot.` → `ragkit.`); move their unit tests into `ragkit/tests/`
+- [ ] S1-T3: DocPilot dogfood: add ragkit dep to pyproject (git pin), rewire
+      imports in `pipeline_ask.py` / `pipeline_ingest.py` (+ any other refs),
+      delete the moved modules from `src/docpilot/`, grep-verify zero imports
+      of the moved-package prefixes remain in `src/`
+- [ ] S1-T4: connection semantics: ragkit owns DSN→conn for PgVectorStore;
+      DocPilot delegates; decide `db/maintenance.py` home (DocPilot or ragkit)
+- [ ] S1-T5: ragkit standalone test suite green (moved tests + interface
+      tests, hermetic — no model/network)
+- [ ] S1-T6: DocPilot full suite green on ragkit imports (≥ baseline 552)
+- [ ] S1-T7: retrieval parity evidence: same-process `ask()` top-k identical
+      to pre-extraction (reuse the parity-harness pattern); one CLI/API smoke
+- [ ] S1-T8: exit sweep: READMEs honest (DocPilot built on ragkit core),
+      ragkit tag `v0.1.0`, DocPilot pin recorded, §8.5 all `[x]`, cut
+      `phase-7` tag
+
+### 8.4 deferred stages (planned, NOT this phase)
+- Stage 2 — agentic: `agent/*`, `tools/*` (GitHub Tool), langgraph dep moves
+  to ragkit; gate = full suite green + agentic parity sample
+- Stage 3 — eval: `eval/{benchmark,triples,__main__,judge_ab,
+  tool_necessity}.py` (Evaluator + checkpointed/TPD-aware harness) → ragkit.eval
+- Stage 4 — codegen: `codegen/*`, `validation/*`, `agent/code_route.py`
+  (Generator + CodeValidator)
+- no CI / no PyPI in any stage until the user explicitly calls for release
+  hygiene
+
+### 8.5 exit criteria (Stage 1 — checked at phase close, mirror §7.5 style)
+- [ ] ragkit repo live; installable from git (`uv pip install` or pip); a
+      fresh `python -c "import ragkit"` works from a clean venv
+- [ ] DocPilot has zero copies of the moved modules — grep shows no
+      `docpilot.(ingestion|embeddings|retrieval|reranking|generation|
+      citations|core|db.connection)` import left in `src/`; no shims
+- [ ] ragkit standalone test suite green
+- [ ] DocPilot full suite green (≥ baseline 552)
+- [ ] retrieval parity evidence committed (identical top-k pre/post)
+- [ ] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag);
+      no secrets; both repos pushed to origin/main
+
+### 8.6 non-scope / deferred (decide later, not now)
+- any feature change or behavior improvement while extracting (refactor only)
+- rerank/hybrid lever re-evaluation — levers stay OFF (Phase 6 gate verdict)
+- CI, PyPI publishing, docs site
+- git-history rewrite of either repo
 
 ## 9. architectural_discipline
 - interfaces:
@@ -1248,6 +1335,7 @@ flips pending.
   - Generator
   - CitationEngine
   - Evaluator
+  - CodeValidator (Phase 6/7 — codegen stage, PLAN §8.4)
 - rule: >
     No hard-coded vendor/library calls in business logic (no bare groq.chat /
     pgvector query outside its interface impl). Keep interfaces clean so
@@ -1271,6 +1359,10 @@ flips pending.
 ## 11. git_workflow
 - repo: https://github.com/Saif-Ali-109/DocPilot.git
 - branch: main
+- second_repo (Phase 7, PLAN §8): https://github.com/Saif-Ali-109/ragkit.git —
+  branch main; DocPilot depends on ragkit and pins the exact ragkit
+  commit/tag it consumes (version pairing: DocPilot pyproject pin ↔ ragkit
+  tag). Keep the pair in sync in the same work batch.
 - rule: >
     Keep the repo in sync with the work. Commit every task and every phase as
     it completes. The git history must mirror the build progression so each
