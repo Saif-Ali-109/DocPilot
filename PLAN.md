@@ -1273,9 +1273,12 @@ flips pending.
   app and agent deps stay DocPilot-side until their stage moves.
 
 ### 8.3 tasks (Stage 1 — execution order)
-- [ ] S1-T1: scaffold ragkit repo: `src/ragkit/` layout, pyproject.toml,
+- [x] S1-T1: scaffold ragkit repo: `src/ragkit/` layout, pyproject.toml,
       .gitignore, minimal README; `chore: scaffold ragkit`; editable install
-      into the DocPilot venv
+      into the DocPilot venv — DONE 2026-09-17: repo live at
+      https://github.com/Saif-Ali-109/ragkit.git (public, branch main, pushed
+      `chore: scaffold ragkit`); `uv pip install -e` into the DocPilot venv;
+      `import ragkit` resolves to the live source dir
 - [ ] S1-T2: move the §8.2 modules mechanically (prefix swap
       `docpilot.` → `ragkit.`); move their unit tests into `ragkit/tests/`
 - [ ] S1-T3: DocPilot dogfood: add ragkit dep to pyproject (git pin), rewire

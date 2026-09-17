@@ -111,7 +111,9 @@ last_updated: 2026-09-17
   cut; T1–T6 done (see §1 gate status). Levers stay OFF (gate verdict).
 - Phase 7 ACTIVE 2026-09-17 — framework extraction (ragkit): PLAN §8 signed
   off (separate repo https://github.com/Saif-Ali-109/ragkit.git, dogfood,
-  staged core-first, no CI/PyPI this phase). Next: §8.3 S1-T1 scaffold ragkit.
+  staged core-first, no CI/PyPI this phase). S1-T1 DONE (repo scaffolded +
+  pushed + editable-installed into the DocPilot venv). Next: §8.3 S1-T2 move
+  the core-chain modules (`docpilot.` → `ragkit.` prefix swap).
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
   WI-1 judge-skip gate decided (threshold 0.0 locked), Phase 6 signed off
   AND exited (§7.5 sweep + tag). No other open gates; levers stay OFF
