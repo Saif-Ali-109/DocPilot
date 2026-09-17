@@ -86,7 +86,7 @@ def _embedding_dimension(retriever) -> int | None:
 
 
 def _build_default_retriever():
-    """Build ``SimpleRetriever(BGEEmbeddingProvider(), PgVectorStore(conn))``.
+    """Build ``SimpleRetriever(get_default_embedding_provider(), PgVectorStore(conn))``.
 
     Returns:
         A ``(retriever, conn)`` tuple. The caller owns *conn* and must close it.
@@ -96,7 +96,7 @@ def _build_default_retriever():
             applied (psycopg/native error chained as the cause).
     """
     from docpilot.db.connection import ensure_schema, get_connection
-    from docpilot.embeddings.provider import BGEEmbeddingProvider
+    from docpilot.embeddings.provider import get_default_embedding_provider
     from docpilot.retrieval.retriever import SimpleRetriever
     from docpilot.retrieval.vector_store import PgVectorStore
 
@@ -113,7 +113,9 @@ def _build_default_retriever():
             "pgvector schema — is the server running and is the 'vector' "
             f"extension available? ({exc})"
         ) from exc
-    embedding_provider = BGEEmbeddingProvider()
+    # Process-wide BGE provider: the ~16 s model load is paid once per
+    # process, not once per question (see embeddings.provider module docs).
+    embedding_provider = get_default_embedding_provider()
     retriever = SimpleRetriever(embedding_provider, store)
     if config.RERANK_ENABLED:
         from docpilot.reranking.reranker import BCEReranker

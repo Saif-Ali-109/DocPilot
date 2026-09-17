@@ -102,7 +102,8 @@ def ingest_corpus(
             implementations) but is not consumed by the Phase 1 chunker.
         chunker: An optional ``Chunker`` (default: ``MarkdownChunker``).
         embedding_provider: An optional ``EmbeddingProvider``
-            (default: ``BGEEmbeddingProvider``).
+            (default: the process-wide ``get_default_embedding_provider()`` —
+            one BGE model per process, shared with the ask pipeline).
         vector_store: An optional ``VectorStore``
             (default: ``PgVectorStore`` over a fresh connection with the
             schema ensured and closed afterwards).
@@ -115,7 +116,7 @@ def ingest_corpus(
     deletes every existing row whose ``source_file`` is about to be
     (re)inserted — a re-run never duplicates chunks.
     """
-    from docpilot.embeddings.provider import BGEEmbeddingProvider
+    from docpilot.embeddings.provider import get_default_embedding_provider
     from docpilot.ingestion.chunker import MarkdownChunker
     from docpilot.ingestion.fastapi_loader import FastAPIDocumentLoader
     from docpilot.ingestion.parser import MarkdownParser
@@ -129,7 +130,7 @@ def ingest_corpus(
         loader = loader or FastAPIDocumentLoader(docs_dir=Path(corpus_dir))
         parser = parser or MarkdownParser()
         chunker = chunker or MarkdownChunker()
-        embedding_provider = embedding_provider or BGEEmbeddingProvider()
+        embedding_provider = embedding_provider or get_default_embedding_provider()
 
         timings: dict[str, float] = {}
 

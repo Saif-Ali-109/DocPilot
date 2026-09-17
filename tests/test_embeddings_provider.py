@@ -5,6 +5,9 @@ use.  If no network is available the download will fail and the test is
 skipped with a clear message.
 """
 
+import threading
+import time
+
 import numpy as np
 import pytest
 
@@ -80,3 +83,80 @@ class TestBGEEmbeddingProvider:
         result1 = provider.embed(["deterministic test"])
         result2 = provider.embed(["deterministic test"])
         np.testing.assert_array_equal(result1, result2)
+
+
+# ---------------------------------------------------------------------------
+# get_default_embedding_provider() — process-wide singleton + race safety
+# ---------------------------------------------------------------------------
+
+
+class _CountingSlowProvider:
+    """Fake replacing BGEEmbeddingProvider for the singleton tests.
+
+    The constructor sleeps to widen any race window, and counts how many
+    instances were created, so the tests can assert the lazy init builds
+    exactly one provider even under concurrency. No model/network involved.
+    """
+
+    created = 0
+    _count_lock = threading.Lock()
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        with type(self)._count_lock:
+            type(self).created += 1
+        time.sleep(0.05)
+
+
+def test_default_provider_is_cached(monkeypatch) -> None:
+    """get_default_embedding_provider() returns the same instance every call."""
+    import docpilot.embeddings.provider as provider_module
+
+    monkeypatch.setattr(provider_module, "_default_provider", None)
+    monkeypatch.setattr(
+        provider_module, "BGEEmbeddingProvider", _CountingSlowProvider
+    )
+    _CountingSlowProvider.created = 0
+
+    first = provider_module.get_default_embedding_provider()
+    second = provider_module.get_default_embedding_provider()
+
+    assert first is second
+    assert _CountingSlowProvider.created == 1
+
+
+def test_default_provider_race_constructs_once(monkeypatch) -> None:
+    """Concurrent first calls must construct exactly one shared provider."""
+    import docpilot.embeddings.provider as provider_module
+
+    monkeypatch.setattr(provider_module, "_default_provider", None)
+    monkeypatch.setattr(
+        provider_module, "BGEEmbeddingProvider", _CountingSlowProvider
+    )
+    _CountingSlowProvider.created = 0
+
+    n_threads = 8
+    barrier = threading.Barrier(n_threads)
+    instances: list[object] = []
+    errors: list[BaseException] = []
+
+    def _call() -> None:
+        try:
+            barrier.wait()
+            instances.append(provider_module.get_default_embedding_provider())
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_call) for _ in range(n_threads)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert errors == [], f"unexpected thread errors: {errors}"
+    assert _CountingSlowProvider.created == 1, (
+        "expected exactly 1 construction under concurrency, "
+        f"got {_CountingSlowProvider.created}"
+    )
+    assert len({id(p) for p in instances}) == 1, (
+        "all threads must share the same provider instance"
+    )

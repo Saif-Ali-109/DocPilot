@@ -1,6 +1,10 @@
+import logging
+import threading
 from abc import ABC, abstractmethod
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingProvider(ABC):
@@ -43,9 +47,17 @@ class BGEEmbeddingProvider(EmbeddingProvider):
     def _get_or_load_model(self):
         """Return the loaded model, loading it lazily on first use."""
         if self._model is None:
+            import time
+
             from sentence_transformers import SentenceTransformer
 
+            _load_started = time.perf_counter()
             self._model = SentenceTransformer(self._model_name, device="cpu")
+            logger.info(
+                "Loaded embedding model %s in %.1f s",
+                self._model_name,
+                time.perf_counter() - _load_started,
+            )
         return self._model
 
     # ------------------------------------------------------------------
@@ -79,3 +91,36 @@ class BGEEmbeddingProvider(EmbeddingProvider):
     def dimension(self) -> int:
         """Return the embedding dimension (384 for BGE-small)."""
         return self._expected_dimension
+
+
+# ---------------------------------------------------------------------------
+# Process-wide default provider
+# ---------------------------------------------------------------------------
+# _build_default_retriever() used to construct a fresh BGEEmbeddingProvider per
+# call, which lazy-loaded the ~450 MB BGE-small model from disk on every
+# ask()/API/agentic run (~16 s each — measured). The default provider below is
+# created lazily once per process and reused; embed() is a pure function of
+# its inputs, so sharing one instance never changes retrieval results. The
+# lock makes the lazy init safe when two requests race on the first call.
+# Direct BGEEmbeddingProvider(model_name=...) construction is unaffected and
+# is the (uncached) path for custom models.
+
+_default_provider: "BGEEmbeddingProvider | None" = None
+_default_provider_lock = threading.Lock()
+
+
+def get_default_embedding_provider() -> "BGEEmbeddingProvider":
+    """Return the process-wide BGE provider, loading the model once.
+
+    The model (weights + tokenizer) is loaded from disk exactly once per
+    process and reused by every retriever and ingest run. The first call
+    pays the one-time load; every subsequent call is a cache hit. Safe to
+    call from multiple threads (FastAPI worker threads): concurrent first
+    callers serialize on the lock and share one instance.
+    """
+    global _default_provider
+    if _default_provider is None:
+        with _default_provider_lock:
+            if _default_provider is None:  # double-checked, race-safe
+                _default_provider = BGEEmbeddingProvider()
+    return _default_provider
