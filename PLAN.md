@@ -1279,6 +1279,10 @@ flips pending.
       https://github.com/Saif-Ali-109/ragkit.git (public, branch main, pushed
       `chore: scaffold ragkit`); `uv pip install -e` into the DocPilot venv;
       `import ragkit` resolves to the live source dir
+- [x] S1-T1b: ragkit self-docs — DONE 2026-09-17: ragkit repo carries its own
+      SPEC/PLAN/ACTIVE trio + README pointer (derived from DocPilot's docs),
+      so the framework is self-explanatory to new agents/people; DocPilot's
+      docs remain authoritative here
 - [ ] S1-T2: move the §8.2 modules mechanically (prefix swap
       `docpilot.` → `ragkit.`); move their unit tests into `ragkit/tests/`
 - [ ] S1-T3: DocPilot dogfood: add ragkit dep to pyproject (git pin), rewire

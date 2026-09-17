@@ -112,7 +112,8 @@ last_updated: 2026-09-17
 - Phase 7 ACTIVE 2026-09-17 — framework extraction (ragkit): PLAN §8 signed
   off (separate repo https://github.com/Saif-Ali-109/ragkit.git, dogfood,
   staged core-first, no CI/PyPI this phase). S1-T1 DONE (repo scaffolded +
-  pushed + editable-installed into the DocPilot venv). Next: §8.3 S1-T2 move
+  pushed + editable-installed into the DocPilot venv); S1-T1b DONE (ragkit
+  self-docs — SPEC/PLAN/ACTIVE trio + README pointer). Next: §8.3 S1-T2 move
   the core-chain modules (`docpilot.` → `ragkit.` prefix swap).
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
   WI-1 judge-skip gate decided (threshold 0.0 locked), Phase 6 signed off
