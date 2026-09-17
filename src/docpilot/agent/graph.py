@@ -59,8 +59,8 @@ from docpilot.agent.types import (
     dict_to_tool_result,
     tool_result_to_dict,
 )
-from docpilot.core.models import Chunk, RetrieverResult, SourceRef, derive_source_kind
-from docpilot.generation.prompts import SYSTEM_PROMPT, format_sources
+from ragkit.core.models import Chunk, RetrieverResult, SourceRef, derive_source_kind
+from ragkit.generation.prompts import SYSTEM_PROMPT, format_sources
 from docpilot.pipeline_ask import _NO_CONTEXT_NOTE
 from docpilot.tools import ToolRequest, ToolResult
 

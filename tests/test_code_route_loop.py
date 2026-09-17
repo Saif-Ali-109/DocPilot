@@ -10,7 +10,7 @@ being returned (§7.5: unvalidated code is never returned).
 from __future__ import annotations
 
 from docpilot.agent.code_route import run_code_route
-from docpilot.core.models import Chunk, RetrieverResult
+from ragkit.core.models import Chunk, RetrieverResult
 from docpilot.validation import RetrieveThenValidate
 
 # ---------------------------------------------------------------------------

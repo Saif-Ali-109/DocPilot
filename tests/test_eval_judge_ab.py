@@ -15,9 +15,9 @@ import pytest
 
 from docpilot.agent.judge import LLMSufficiencyJudge, reset_judge_parse_fallback_counts
 from docpilot.agent.types import Judgment
-from docpilot.core.models import RetrieverResult
+from ragkit.core.models import RetrieverResult
 from docpilot.eval import judge_ab
-from docpilot.generation.generator import Generator
+from ragkit.generation.generator import Generator
 from docpilot.eval.judge_ab import (
     build_ab_report,
     evaluate_prompt,

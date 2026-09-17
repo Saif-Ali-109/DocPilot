@@ -6,7 +6,7 @@ The :data:`REFUSE_ANSWER` constant is the verbatim SPEC §3.9 sentence and
 
 from __future__ import annotations
 
-from docpilot.core.models import RetrieverResult
+from ragkit.core.models import RetrieverResult
 
 # ---------------------------------------------------------------------------
 # REFUSE_ANSWER — SPEC §3.9 verbatim (tests assert exact value)

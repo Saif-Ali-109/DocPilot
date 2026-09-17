@@ -12,7 +12,7 @@ pipeline must never crash.
 
 The retrieve → context+sources → generate → cite core is shared with the
 streaming API fast path (:func:`docpilot.api.service._run_direct`) via
-:func:`docpilot.core.direct._run_direct_core`; this module keeps only the
+:func:`ragkit.core.direct._run_direct_core`; this module keeps only the
 non-streaming Phase-1 behaviour, its own observability logging, and the
 ``AskResult`` summary. :data:`_NO_CONTEXT_NOTE` is defined in the shared core
 and re-exported here so the agent graph's import location stays unchanged.
@@ -25,9 +25,9 @@ import time
 from dataclasses import dataclass, field
 
 from docpilot import config
-from docpilot.citations.engine import StandardCitationEngine
-from docpilot.core.direct import _NO_CONTEXT_NOTE, _run_direct_core
-from docpilot.core.models import RetrieverResult, SourceRef
+from ragkit.citations.engine import StandardCitationEngine
+from ragkit.core.direct import _NO_CONTEXT_NOTE, _run_direct_core
+from ragkit.core.models import RetrieverResult, SourceRef
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +95,10 @@ def _build_default_retriever():
         RuntimeError: If the database is unreachable or the schema cannot be
             applied (psycopg/native error chained as the cause).
     """
-    from docpilot.db.connection import ensure_schema, get_connection
-    from docpilot.embeddings.provider import get_default_embedding_provider
-    from docpilot.retrieval.retriever import SimpleRetriever
-    from docpilot.retrieval.vector_store import PgVectorStore
+    from ragkit.db.connection import ensure_schema, get_connection
+    from ragkit.embeddings.provider import get_default_embedding_provider
+    from ragkit.retrieval.retriever import SimpleRetriever
+    from ragkit.retrieval.vector_store import PgVectorStore
 
     conn = None
     try:
@@ -118,14 +118,14 @@ def _build_default_retriever():
     embedding_provider = get_default_embedding_provider()
     retriever = SimpleRetriever(embedding_provider, store)
     if config.RERANK_ENABLED:
-        from docpilot.reranking.reranker import BCEReranker
+        from ragkit.reranking.reranker import BCEReranker
 
         retriever = SimpleRetriever(
             embedding_provider, store, reranker=BCEReranker()
         )
     if config.HYBRID_ENABLED:
-        from docpilot.retrieval.hybrid import HybridRetriever
-        from docpilot.retrieval.lexical import PostgresFTSSearcher
+        from ragkit.retrieval.hybrid import HybridRetriever
+        from ragkit.retrieval.lexical import PostgresFTSSearcher
 
         # Vector half = the (possibly reranked) dense retriever above;
         # lexical half = Postgres full-text over the same chunks table.
@@ -168,7 +168,7 @@ def ask(
         An :class:`AskResult` carrying the answer, footer, sources and raw
         observability fields (prompt, response, latency).
     """
-    from docpilot.generation.generator import GroqGenerator
+    from ragkit.generation.generator import GroqGenerator
 
     conn = None
     if retriever is None:

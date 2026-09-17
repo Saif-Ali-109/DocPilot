@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from typing import TypedDict
 
-from docpilot.core.models import Chunk, RetrieverResult, SourceRef
+from ragkit.core.models import Chunk, RetrieverResult, SourceRef
 from docpilot.tools.base import ToolResult
 
 # ---------------------------------------------------------------------------

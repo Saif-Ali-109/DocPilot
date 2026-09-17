@@ -16,7 +16,7 @@ from docpilot.agent.code_route import (
     decide_code_route,
     run_code_route,
 )
-from docpilot.core.models import Chunk, RetrieverResult
+from ragkit.core.models import Chunk, RetrieverResult
 from docpilot.validation import RetrieveThenValidate
 
 # ---------------------------------------------------------------------------

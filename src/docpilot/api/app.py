@@ -286,7 +286,7 @@ def _store_probe(store: SessionStore) -> bool:
 def _corpus_probe() -> dict:
     """Best-effort pgvector corpus stats; never raises."""
     try:
-        from docpilot.db.connection import get_connection
+        from ragkit.db.connection import get_connection
 
         conn = get_connection()
         try:

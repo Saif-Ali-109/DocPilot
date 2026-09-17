@@ -36,7 +36,7 @@ from docpilot.agent.judge import (
 )
 from docpilot.eval.judge_ab import triples_to_results
 from docpilot.eval.triples import TripleChunk
-from docpilot.generation.generator import GroqGenerator
+from ragkit.generation.generator import GroqGenerator
 
 logger = logging.getLogger(__name__)
 

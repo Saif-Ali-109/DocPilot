@@ -116,7 +116,10 @@ last_updated: 2026-09-17
   self-docs — SPEC/PLAN/ACTIVE trio + README pointer). S1-T2 DONE (moved
   the §8.2 core-chain modules + unit tests into ragkit, mechanical prefix
   swap; moved suite green in the DocPilot venv — 182 passed, 1 skipped).
-  Next: §8.3 S1-T3 DocPilot rewire (imports → ragkit, delete moved modules).
+  S1-T3 DONE (DocPilot dogfood rewire: src + tests import `ragkit.*`; moved
+  modules + 11 unit-test files deleted; pyproject pins ragkit `@ed0f908`;
+  DocPilot 369 + ragkit 183 = combined 552). Next: §8.3 S1-T4 connection
+  semantics + `db/maintenance.py` home.
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
   WI-1 judge-skip gate decided (threshold 0.0 locked), Phase 6 signed off
   AND exited (§7.5 sweep + tag). No other open gates; levers stay OFF

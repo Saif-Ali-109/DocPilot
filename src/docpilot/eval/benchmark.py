@@ -711,7 +711,7 @@ class GroundingChecker:
     """
 
     def __init__(self, generator=None):
-        from docpilot.generation.generator import GroqGenerator
+        from ragkit.generation.generator import GroqGenerator
 
         self._generator = generator if generator is not None else GroqGenerator()
 
@@ -1025,7 +1025,7 @@ def probe_quota() -> int:
     checkpointing + resume-at-stamp + retry-after fail-fast, not by this gate
     (SPEC §6.5).
     """
-    from docpilot.generation.generator import GroqGenerator
+    from ragkit.generation.generator import GroqGenerator
 
     gen = GroqGenerator(max_retries=1)
     print(f"probe: model={gen._model}")

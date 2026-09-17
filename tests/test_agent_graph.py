@@ -27,8 +27,8 @@ from docpilot import config
 from docpilot.agent.graph import build_graph, trace_step_to_dict
 from docpilot.agent.prompts import REFUSE_ANSWER
 from docpilot.agent.types import AgentLoopState, Judgment, LoopTraceStep
-from docpilot.citations.engine import StandardCitationEngine
-from docpilot.core.models import Chunk, RetrieverResult
+from ragkit.citations.engine import StandardCitationEngine
+from ragkit.core.models import Chunk, RetrieverResult
 from docpilot.tools import Tool, ToolRequest, ToolResult
 
 from test_pipeline_e2e import FakeGenerator

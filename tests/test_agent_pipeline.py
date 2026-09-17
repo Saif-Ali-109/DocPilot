@@ -22,9 +22,9 @@ import pytest
 from docpilot import cli, config
 from docpilot.agent.pipeline_agentic import AgenticAgent, agentic_ask
 from docpilot.agent.types import Judgment
-from docpilot.citations.engine import StandardCitationEngine
+from ragkit.citations.engine import StandardCitationEngine
 from docpilot.pipeline_ask import ask as pipeline_ask
-from docpilot.retrieval.retriever import SimpleRetriever
+from ragkit.retrieval.retriever import SimpleRetriever
 from docpilot.tools import ToolResult
 
 from test_pipeline_e2e import (
@@ -49,7 +49,7 @@ CANNED = "To install FastAPI, run `pip install fastapi`. [1]"
 
 def build_ask_wiring():
     """Phase 1 style fakes over the fixture corpus (retriever + generator)."""
-    from docpilot.ingestion.chunker import MarkdownChunker
+    from ragkit.ingestion.chunker import MarkdownChunker
 
     chunker = MarkdownChunker()
     all_chunks = []

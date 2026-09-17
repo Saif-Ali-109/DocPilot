@@ -21,15 +21,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from docpilot import config
-from docpilot.citations.engine import StandardCitationEngine
+from ragkit.citations.engine import StandardCitationEngine
 from docpilot.codegen.prompts import CODE_FIX_PROMPT, CODE_PROMPT
-from docpilot.core.direct import _NO_CONTEXT_NOTE
-from docpilot.core.models import (
+from ragkit.core.direct import _NO_CONTEXT_NOTE
+from ragkit.core.models import (
     RetrieverResult,
     SourceRef,
     derive_source_kind,
 )
-from docpilot.generation.prompts import format_sources
+from ragkit.generation.prompts import format_sources
 from docpilot.validation.validator import extract_code_blocks
 from docpilot.validation.verdict import ValidationVerdict
 
@@ -178,7 +178,7 @@ def ask_code(
         A :class:`CodeRequest` carrying the raw/cited output, extracted code
         blocks, sources and observability fields.
     """
-    from docpilot.generation.generator import GroqGenerator
+    from ragkit.generation.generator import GroqGenerator
     from docpilot.pipeline_ask import _build_default_retriever
 
     conn = None

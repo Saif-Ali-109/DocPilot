@@ -10,7 +10,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from docpilot.core.models import SourceRef
+from ragkit.core.models import SourceRef
 from docpilot.agent.types import LoopTraceStep
 
 

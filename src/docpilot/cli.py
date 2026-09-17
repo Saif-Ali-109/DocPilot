@@ -205,7 +205,7 @@ def _run_dedupe(args: argparse.Namespace, injected: dict[str, Any]) -> int:
     is created. ``--dry-run`` only reports the duplicate count.
     """
     from docpilot.db import maintenance
-    from docpilot.db.connection import ensure_schema, get_connection
+    from ragkit.db.connection import ensure_schema, get_connection
 
     conn = injected.get("conn")
     owned = conn is None

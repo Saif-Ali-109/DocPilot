@@ -8,6 +8,11 @@ authors = [
 ]
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    # Phase 7 (S1-T3): DocPilot consumes the extracted ragkit core chain
+    # (dogfood) — no copied modules in src/docpilot/. Pinned to the exact
+    # ragkit commit; updated to the `v0.1.0` tag at Stage-1 close
+    # (PLAN §8.5 version pairing).
+    "ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@ed0f908",
     "torch==2.14.0+cpu",
     "psycopg[binary]>=3.2.0",
     "pgvector>=0.3.0",

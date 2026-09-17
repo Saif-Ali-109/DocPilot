@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from docpilot.agent.graph import build_graph
 from docpilot.agent.pipeline_agentic import agentic_ask
-from docpilot.citations.engine import StandardCitationEngine
+from ragkit.citations.engine import StandardCitationEngine
 
 from test_agent_graph import (
     GATE_QUERY,

@@ -14,11 +14,11 @@ import json
 import pytest
 
 from docpilot import cli
-from docpilot.citations.engine import StandardCitationEngine
-from docpilot.ingestion.chunker import MarkdownChunker
-from docpilot.ingestion.parser import MarkdownParser
+from ragkit.citations.engine import StandardCitationEngine
+from ragkit.ingestion.chunker import MarkdownChunker
+from ragkit.ingestion.parser import MarkdownParser
 from docpilot.pipeline_ask import ask as pipeline_ask
-from docpilot.retrieval.retriever import SimpleRetriever
+from ragkit.retrieval.retriever import SimpleRetriever
 
 from test_pipeline_e2e import (
     FIXTURE_DOCS,

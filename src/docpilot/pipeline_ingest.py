@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from docpilot.core.models import Chunk
+from ragkit.core.models import Chunk
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,8 @@ def _build_default_vector_store():
             cannot be applied. The psycopg/native error is chained as the
             cause so the message stays human-friendly.
     """
-    from docpilot.db.connection import ensure_schema, get_connection
-    from docpilot.retrieval.vector_store import PgVectorStore
+    from ragkit.db.connection import ensure_schema, get_connection
+    from ragkit.retrieval.vector_store import PgVectorStore
 
     conn = None
     try:
@@ -116,10 +116,10 @@ def ingest_corpus(
     deletes every existing row whose ``source_file`` is about to be
     (re)inserted — a re-run never duplicates chunks.
     """
-    from docpilot.embeddings.provider import get_default_embedding_provider
-    from docpilot.ingestion.chunker import MarkdownChunker
-    from docpilot.ingestion.fastapi_loader import FastAPIDocumentLoader
-    from docpilot.ingestion.parser import MarkdownParser
+    from ragkit.embeddings.provider import get_default_embedding_provider
+    from ragkit.ingestion.chunker import MarkdownChunker
+    from ragkit.ingestion.fastapi_loader import FastAPIDocumentLoader
+    from ragkit.ingestion.parser import MarkdownParser
 
     store = vector_store
     conn = None

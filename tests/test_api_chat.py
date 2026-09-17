@@ -14,8 +14,8 @@ from docpilot.api.app import create_app
 from docpilot.api.service import ask_events
 from docpilot.api.sse import parse_sse_block
 from docpilot.api.store import SessionStore
-from docpilot.citations.engine import StandardCitationEngine
-from docpilot.core.models import Chunk, RetrieverResult
+from ragkit.citations.engine import StandardCitationEngine
+from ragkit.core.models import Chunk, RetrieverResult
 
 # Reused fakes from the graph/pipeline tests.
 from test_agent_graph import StubJudge
@@ -315,7 +315,7 @@ class TestAgenticPathEvents:
 class TestModelKnob:
     def test_model_forwarded_when_building_default_generator(self, monkeypatch) -> None:
         """Generators built lazily (generator=None) receive the model knob."""
-        import docpilot.generation.generator as gen_mod
+        import ragkit.generation.generator as gen_mod
 
         built: list[str | None] = []
 

@@ -17,7 +17,7 @@ path.  On the agentic path the gate (and every node) step event is emitted by
 ``agentic_ask`` itself; on the direct path this module emits the gate step,
 the retrieval debug payload, streamed answer tokens, and the final answer.
 The retrieve → context+sources → generate → cite work is delegated to the
-shared direct core (:func:`docpilot.core.direct._run_direct_core`), the same
+shared direct core (:func:`ragkit.core.direct._run_direct_core`), the same
 code the CLI pipeline (:func:`docpilot.pipeline_ask.ask`) runs, so output is
 byte-identical to the CLI's direct path.
 
@@ -39,9 +39,9 @@ from docpilot.agent.graph import trace_step_to_dict
 from docpilot.agent.pipeline_agentic import agentic_ask
 from docpilot.agent.prompts import REFUSE_ANSWER
 from docpilot.agent.types import LoopTraceStep
-from docpilot.citations.engine import StandardCitationEngine
-from docpilot.core.direct import _run_direct_core
-from docpilot.core.models import SourceRef, derive_source_kind
+from ragkit.citations.engine import StandardCitationEngine
+from ragkit.core.direct import _run_direct_core
+from ragkit.core.models import SourceRef, derive_source_kind
 from docpilot.validation.verdict import CheckStatus, ValidationVerdict
 
 logger = logging.getLogger(__name__)
@@ -221,7 +221,7 @@ def _run_direct(
     but yields answer tokens to ``emit`` as they arrive, then emits the
     formatted answer, the trace and the done summary.  The retrieve →
     context+sources → generate → cite core is shared with the CLI pipeline
-    (:func:`docpilot.core.direct._run_direct_core`); this wrapper keeps the
+    (:func:`ragkit.core.direct._run_direct_core`); this wrapper keeps the
     connection lifecycle, the gate trace step, and the search / answer trace
     steps, driving the search and token events through the core's hooks."""
     started = time.perf_counter()
@@ -238,7 +238,7 @@ def _run_direct(
 
         retriever, conn = _build_default_retriever()
     if generator is None:
-        from docpilot.generation.generator import GroqGenerator
+        from ragkit.generation.generator import GroqGenerator
 
         generator = GroqGenerator(model=model)
     if citation_engine is None:
@@ -359,7 +359,7 @@ def _run_agentic(
     # token usage is observable via generator.last_usage afterwards; the model
     # knob (SPEC §7) applies to the answer generator on this path too.
     if generator is None:
-        from docpilot.generation.generator import GroqGenerator
+        from ragkit.generation.generator import GroqGenerator
 
         generator = GroqGenerator(model=model)
 
@@ -499,7 +499,7 @@ def code_events(
     started = time.perf_counter()
 
     if generator is None:
-        from docpilot.generation.generator import GroqGenerator
+        from ragkit.generation.generator import GroqGenerator
 
         generator = GroqGenerator(model=model)
 

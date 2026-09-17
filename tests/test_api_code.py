@@ -18,7 +18,7 @@ from docpilot.api.app import create_app
 from docpilot.api.service import code_events
 from docpilot.api.sse import parse_sse_block
 from docpilot.api.store import SessionStore
-from docpilot.core.models import Chunk, RetrieverResult
+from ragkit.core.models import Chunk, RetrieverResult
 from docpilot.validation import RetrieveThenValidate
 
 QUESTION = "Write code for a minimal FastAPI app with a GET route."

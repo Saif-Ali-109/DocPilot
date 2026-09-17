@@ -1289,15 +1289,20 @@ flips pending.
       reverse-swap diff byte-mechanical; ragkit moved suite green in the
       DocPilot venv (182 passed, 1 skipped — hermetic skips). venv `.pth`
       editable paths re-pointed to current repo locations.
-- [ ] S1-T3: DocPilot dogfood: add ragkit dep to pyproject (git pin), rewire
+- [x] S1-T3: DocPilot dogfood: add ragkit dep to pyproject (git pin), rewire
       imports in `pipeline_ask.py` / `pipeline_ingest.py` (+ any other refs),
       delete the moved modules from `src/docpilot/`, grep-verify zero imports
-      of the moved-package prefixes remain in `src/`
+      of the moved-package prefixes remain in `src/` — DONE 2026-09-18: src +
+      tests rewired to `ragkit.*`; moved modules and their 11 unit-test files
+      deleted from DocPilot; pyproject pins
+      `ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@ed0f908`;
+      DocPilot suite green (369) with ragkit's 183 → combined 552
 - [ ] S1-T4: connection semantics: ragkit owns DSN→conn for PgVectorStore;
       DocPilot delegates; decide `db/maintenance.py` home (DocPilot or ragkit)
 - [ ] S1-T5: ragkit standalone test suite green (moved tests + interface
       tests, hermetic — no model/network)
-- [ ] S1-T6: DocPilot full suite green on ragkit imports (≥ baseline 552)
+- [ ] S1-T6: combined DocPilot + ragkit suite green on ragkit imports
+      (≥ baseline 552; unit tests live in ragkit only)
 - [ ] S1-T7: retrieval parity evidence: same-process `ask()` top-k identical
       to pre-extraction (reuse the parity-harness pattern); one CLI/API smoke
 - [ ] S1-T8: exit sweep: READMEs honest (DocPilot built on ragkit core),
@@ -1321,7 +1326,8 @@ flips pending.
       `docpilot.(ingestion|embeddings|retrieval|reranking|generation|
       citations|core|db.connection)` import left in `src/`; no shims
 - [ ] ragkit standalone test suite green
-- [ ] DocPilot full suite green (≥ baseline 552)
+- [ ] combined DocPilot + ragkit suite green (≥ baseline 552; unit tests
+      live in ragkit only, no duplicated test files)
 - [ ] retrieval parity evidence committed (identical top-k pre/post)
 - [ ] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag);
       no secrets; both repos pushed to origin/main

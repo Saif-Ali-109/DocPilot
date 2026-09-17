@@ -33,8 +33,8 @@ from docpilot.agent.graph import (
 from docpilot.agent.interface import Agent, AgentResult
 from docpilot.agent.judge import LLMSufficiencyJudge
 from docpilot.agent.types import DEFAULT_MAX_RETRIES, AgentLoopState, LoopTraceStep
-from docpilot.citations.engine import StandardCitationEngine
-from docpilot.generation.generator import GroqGenerator
+from ragkit.citations.engine import StandardCitationEngine
+from ragkit.generation.generator import GroqGenerator
 from docpilot.tools import GitHubTool
 
 logger = logging.getLogger(__name__)

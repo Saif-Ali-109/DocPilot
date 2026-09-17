@@ -21,8 +21,8 @@ from docpilot.agent.prompts import (
     build_judge_user_prompt,
 )
 from docpilot.agent.types import Judgment
-from docpilot.core.models import Chunk, RetrieverResult
-from docpilot.generation.generator import Generator
+from ragkit.core.models import Chunk, RetrieverResult
+from ragkit.generation.generator import Generator
 
 
 class StubGenerator(Generator):

@@ -2,7 +2,7 @@
 
 :class:`LLMSufficiencyJudge` makes **one** structured LLM call per
 ``judge()`` invocation.  The call is routed through the injected
-:class:`~docpilot.generation.generator.Generator` interface — no direct
+:class:`~ragkit.generation.generator.Generator` interface — no direct
 vendor calls here.
 
 On parse failure the judge returns a defensive ``"sufficient"`` verdict so
@@ -21,8 +21,8 @@ from collections import Counter
 
 from docpilot.agent.prompts import JUDGE_SYSTEM_PROMPT, build_judge_user_prompt
 from docpilot.agent.types import Judgment
-from docpilot.core.models import RetrieverResult
-from docpilot.generation.generator import Generator
+from ragkit.core.models import RetrieverResult
+from ragkit.generation.generator import Generator
 
 logger = logging.getLogger(__name__)
 

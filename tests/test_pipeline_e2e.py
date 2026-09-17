@@ -16,17 +16,17 @@ import hashlib
 
 import numpy as np
 
-from docpilot.citations.engine import StandardCitationEngine
-from docpilot.core.models import Chunk, Document, RetrieverResult, source_language
-from docpilot.embeddings.provider import EmbeddingProvider
-from docpilot.generation.generator import Generator
-from docpilot.ingestion.chunker import MarkdownChunker
-from docpilot.ingestion.loader import DocumentLoader
-from docpilot.ingestion.parser import MarkdownParser
+from ragkit.citations.engine import StandardCitationEngine
+from ragkit.core.models import Chunk, Document, RetrieverResult, source_language
+from ragkit.embeddings.provider import EmbeddingProvider
+from ragkit.generation.generator import Generator
+from ragkit.ingestion.chunker import MarkdownChunker
+from ragkit.ingestion.loader import DocumentLoader
+from ragkit.ingestion.parser import MarkdownParser
 from docpilot.pipeline_ask import _NO_CONTEXT_NOTE, ask
 from docpilot.pipeline_ingest import ingest_corpus
-from docpilot.retrieval.retriever import SimpleRetriever
-from docpilot.retrieval.vector_store import VectorStore
+from ragkit.retrieval.retriever import SimpleRetriever
+from ragkit.retrieval.vector_store import VectorStore
 
 # ---------------------------------------------------------------------------
 # Fixture corpus (inline — no filesystem dependency)
@@ -272,7 +272,7 @@ class FakeGenerator(Generator):
     def generate_answer(
         self, context_text: str, sources_text: str, question: str
     ) -> str:
-        from docpilot.generation.prompts import SYSTEM_PROMPT
+        from ragkit.generation.prompts import SYSTEM_PROMPT
 
         self.calls += 1
         self.last_context = context_text

@@ -8,7 +8,7 @@ the same deterministic paths the live pipeline will use.
 from __future__ import annotations
 
 from docpilot.codegen import CODE_PROMPT, ask_code
-from docpilot.core.models import Chunk, RetrieverResult
+from ragkit.core.models import Chunk, RetrieverResult
 
 # ---------------------------------------------------------------------------
 # Fakes

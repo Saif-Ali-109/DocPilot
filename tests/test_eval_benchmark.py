@@ -669,10 +669,10 @@ class TestProbe:
             def probe(self):
                 return result_fn()
 
-        monkeypatch.setattr("docpilot.generation.generator.GroqGenerator", _FakeGen)
+        monkeypatch.setattr("ragkit.generation.generator.GroqGenerator", _FakeGen)
 
     def test_probe_ok_reports_per_minute_headroom(self, monkeypatch, capsys):
-        from docpilot.generation.generator import ProbeResult
+        from ragkit.generation.generator import ProbeResult
 
         self._patch_probe(
             monkeypatch,
@@ -694,7 +694,7 @@ class TestProbe:
         assert "NOT exposed" in out
 
     def test_probe_rate_limited_prints_limit_used(self, monkeypatch, capsys):
-        from docpilot.generation.generator import ProbeResult
+        from ragkit.generation.generator import ProbeResult
 
         self._patch_probe(
             monkeypatch,
@@ -714,7 +714,7 @@ class TestProbe:
         assert "Limit=200000 Used=199455" in out
 
     def test_probe_throttled_per_minute_returns_one(self, monkeypatch, capsys):
-        from docpilot.generation.generator import ProbeResult
+        from ragkit.generation.generator import ProbeResult
 
         self._patch_probe(
             monkeypatch,
@@ -733,7 +733,7 @@ class TestProbe:
         assert "per-minute tokens remaining 10 < 1000" in out
 
     def test_probe_missing_headers_default_ok(self, monkeypatch, capsys):
-        from docpilot.generation.generator import ProbeResult
+        from ragkit.generation.generator import ProbeResult
 
         # No x-ratelimit headers: nothing to gate on beyond a successful call.
         self._patch_probe(monkeypatch, lambda: ProbeResult(ok=True, completion="OK"))
@@ -742,7 +742,7 @@ class TestProbe:
         assert "tokens remaining=None/None" in out
 
     def test_probe_other_error_returns_two(self, monkeypatch, capsys):
-        from docpilot.generation.generator import ProbeResult
+        from ragkit.generation.generator import ProbeResult
 
         self._patch_probe(
             monkeypatch,

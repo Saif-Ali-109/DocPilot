@@ -70,7 +70,7 @@ class TestMaintenanceIntegration:
     @pytest.fixture(autouse=True)
     def _connect(self) -> None:
         try:
-            from docpilot.db.connection import get_connection
+            from ragkit.db.connection import get_connection
 
             conn = get_connection()
             with conn.cursor() as cur:
@@ -141,7 +141,7 @@ class TestDedupeCli:
     @pytest.fixture(autouse=True)
     def _connect(self) -> None:
         try:
-            from docpilot.db.connection import get_connection
+            from ragkit.db.connection import get_connection
 
             conn = get_connection()
             with conn.cursor() as cur:
