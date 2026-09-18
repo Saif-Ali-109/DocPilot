@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from docpilot import config
-from docpilot.agent.judge import (
+from ragkit.agent.judge import (
     LLMSufficiencyJudge,
     judge_parse_fallback_counts,
     reset_judge_parse_fallback_counts,

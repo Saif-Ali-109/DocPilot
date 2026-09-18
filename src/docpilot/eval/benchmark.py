@@ -4,7 +4,7 @@ Runs the **same** question set through both pipelines:
 
   * **classic** — Phase 1 :func:`docpilot.pipeline_ask.ask` fast path
     (retrieve → generate → cite, no agent loop, no tool);
-  * **agentic** — Phase 2 :func:`docpilot.agent.pipeline_agentic.agentic_ask`
+  * **agentic** — Phase 2 :func:`ragkit.agent.pipeline_agentic.agentic_ask`
     with ``strategy="agentic"`` (forced loop, judge + reformulate + Phase 3
     GitHub tool when a PAT exists).
 
@@ -38,8 +38,8 @@ import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from docpilot.agent.prompts import REFUSE_ANSWER
-from docpilot.agent.types import LoopTraceStep
+from ragkit.agent.prompts import REFUSE_ANSWER
+from ragkit.agent.types import LoopTraceStep
 
 logger = logging.getLogger(__name__)
 
@@ -766,7 +766,7 @@ def _classic_run(question: str) -> RunOutput:
 
 def _agentic_run(question: str) -> RunOutput:
     """Phase 2/3 agentic loop (forced) with wall-clock timing and trace counts."""
-    from docpilot.agent.pipeline_agentic import agentic_ask
+    from ragkit.agent.pipeline_agentic import agentic_ask
 
     started = time.perf_counter()
     result = agentic_ask(question, strategy="agentic")

@@ -6,7 +6,7 @@ and reports verdict accuracy, adversarial accuracy, and parse-failure rate.
 Prompt changes are adopted on this calibration data alone — never on judgment.
 
 The core (:func:`evaluate_prompt`, :func:`build_ab_report`) is hermetic and
-LLM-free-agnostic: it drives any :class:`~docpilot.agent.judge.SufficiencyJudge`,
+LLM-free-agnostic: it drives any :class:`~ragkit.agent.judge.SufficiencyJudge`,
 so tests stub the judge and the live runner uses a real Groq-backed judge.
 """
 
@@ -20,14 +20,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from docpilot import config
-from docpilot.agent.judge import (
+from ragkit.agent.judge import (
     LLMSufficiencyJudge,
     SufficiencyJudge,  # noqa: F401  (re-export for tests/stubs)
     judge_parse_fallback_counts,
     reset_judge_parse_fallback_counts,
 )
-from docpilot.agent.prompts import JUDGE_SYSTEM_PROMPT, JUDGE_SYSTEM_PROMPT_B
-from docpilot.agent.types import Judgment  # noqa: F401  (re-export for tests/stubs)
+from ragkit.agent.prompts import JUDGE_SYSTEM_PROMPT, JUDGE_SYSTEM_PROMPT_B
+from ragkit.agent.types import Judgment  # noqa: F401  (re-export for tests/stubs)
 from ragkit.core.models import Chunk, RetrieverResult
 from docpilot.eval.triples import JudgeTriple, load_judge_triples
 from ragkit.generation.generator import GroqGenerator

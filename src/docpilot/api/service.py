@@ -11,7 +11,7 @@ the ``emit`` callback as type-tagged event dicts (protocol documented in
     * the Chainlit UI calls it in-process with a callback that pumps Chainlit
       primitives (no HTTP hop, secrets stay server-side).
 
-Routing mirrors :func:`docpilot.agent.pipeline_agentic.agentic_ask` exactly:
+Routing mirrors :func:`ragkit.agent.pipeline_agentic.agentic_ask` exactly:
 ``auto`` lets the heuristic gate decide, ``direct`` / ``agentic`` force a
 path.  On the agentic path the gate (and every node) step event is emitted by
 ``agentic_ask`` itself; on the direct path this module emits the gate step,
@@ -34,11 +34,11 @@ from typing import Callable
 
 from docpilot import config
 from docpilot.agent.code_route import run_code_route
-from docpilot.agent.gate import HeuristicQueryClassifier
-from docpilot.agent.graph import trace_step_to_dict
-from docpilot.agent.pipeline_agentic import agentic_ask
-from docpilot.agent.prompts import REFUSE_ANSWER
-from docpilot.agent.types import LoopTraceStep
+from ragkit.agent.gate import HeuristicQueryClassifier
+from ragkit.agent.graph import trace_step_to_dict
+from ragkit.agent.pipeline_agentic import agentic_ask
+from ragkit.agent.prompts import REFUSE_ANSWER
+from ragkit.agent.types import LoopTraceStep
 from ragkit.citations.engine import StandardCitationEngine
 from ragkit.core.direct import _run_direct_core
 from ragkit.core.models import SourceRef, derive_source_kind
@@ -47,7 +47,7 @@ from docpilot.validation.verdict import CheckStatus, ValidationVerdict
 logger = logging.getLogger(__name__)
 
 # Excerpt length for the debug-panel "search" payload (identical constant in
-# docpilot.agent.graph — the two event emitters stay shape-compatible).
+# ragkit.agent.graph — the two event emitters stay shape-compatible).
 _EXCERPT_CHARS = 220
 
 _VALID_STRATEGIES = frozenset({"auto", "direct", "agentic"})

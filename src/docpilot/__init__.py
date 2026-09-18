@@ -20,5 +20,14 @@ load_dotenv(_ENV_PATH)
 
 from docpilot.cli import main
 
+# Stage 2 (S2-T2): register the host wiring for ragkit's agentic core. The
+# default-component machinery (Phase-1 ask() wrapper + DB-backed retriever
+# builder consulting app levers) stays DocPilot-owned; ragkit's agentic core
+# calls it via ragkit.agent.host_wiring when the caller injects no components.
+from docpilot.pipeline_ask import _build_default_retriever, ask as _direct_ask
+from ragkit.agent.host_wiring import set_host_wiring
+
+set_host_wiring(direct_ask=_direct_ask, default_retriever=_build_default_retriever)
+
 if __name__ == "__main__":  # defensive; console scripts call main() directly
     sys.exit(main())

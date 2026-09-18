@@ -17,8 +17,8 @@ from docpilot.api.store import SessionStore
 from ragkit.citations.engine import StandardCitationEngine
 from ragkit.core.models import Chunk, RetrieverResult
 
-# Reused fakes from the graph/pipeline tests.
-from test_agent_graph import StubJudge
+# Reused fakes from the shared agent/pipeline test kit (ragkit.testing).
+from ragkit.testing import StubJudge
 
 SIMPLE_QUESTION = "How do I install FastAPI?"
 AGENTIC_QUESTION = (
@@ -34,7 +34,7 @@ STREAM_TEXT = "Streamed answer [1]"
 
 
 class FakeRetriever:
-    """Fixed result list per query; mirrors test_agent_graph.FakeRetriever."""
+    """Fixed result list per query; mirrors ragkit.testing.FakeRetriever."""
 
     def __init__(self, results_by_query) -> None:
         self.results_by_query = results_by_query

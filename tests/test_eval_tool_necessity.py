@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from docpilot import eval as eval_pkg
-from docpilot.agent.types import Judgment
+from ragkit.agent.types import Judgment
 from docpilot.eval import tool_necessity as tn
 from docpilot.eval.tool_necessity import (
     ToolNecessityTriple,

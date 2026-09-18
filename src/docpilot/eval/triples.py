@@ -1,7 +1,7 @@
 """Labeled verdict-triple dataset for judge calibration (SPEC §6.2).
 
 A *triple* is ``(question, context, gold_verdict)`` — judged by the
-:class:`~docpilot.agent.judge.SufficiencyJudge` **independently of retrieval
+:class:`~ragkit.agent.judge.SufficiencyJudge` **independently of retrieval
 and routing quality**.  Contexts are real passages cut from the FastAPI
 corpus (``docs/en/docs/**``), so the judge sees the same shape of chunk it
 meets in production.

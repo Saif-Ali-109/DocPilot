@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from docpilot.agent.judge import LLMSufficiencyJudge, reset_judge_parse_fallback_counts
-from docpilot.agent.types import Judgment
+from ragkit.agent.judge import LLMSufficiencyJudge, reset_judge_parse_fallback_counts
+from ragkit.agent.types import Judgment
 from ragkit.core.models import RetrieverResult
 from docpilot.eval import judge_ab
 from ragkit.generation.generator import Generator

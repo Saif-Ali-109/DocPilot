@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from docpilot.agent.types import LoopTraceStep
+from ragkit.agent.types import LoopTraceStep
 from docpilot.eval import benchmark as bm
 from docpilot.eval.benchmark import (
     BenchmarkQuestion,
@@ -283,7 +283,7 @@ class TestScoring:
         """The §3.9 refusal sentence in the answer means the pipeline refused
         even when its refused flag wasn't set (2026-09-09 live bn03: the
         generator self-refused on the answer path after a tool call)."""
-        from docpilot.agent.prompts import REFUSE_ANSWER
+        from ragkit.agent.prompts import REFUSE_ANSWER
 
         q = [_question("n1", "neither", facts=(), sources=(), gold_refusal=True)]
         report = run_pipeline(

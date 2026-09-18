@@ -17,7 +17,17 @@ load_dotenv(_ENV_PATH)
 # import time and caches it. The secrets below stay DocPilot-owned because
 # they keep the fail-fast ``_require`` behaviour.
 from ragkit.config import (
+    AGENT_GATE_LONG_THRESHOLD,
+    AGENT_JUDGE_MODEL,
+    AGENT_JUDGE_SCORE_FLOOR,
+    AGENT_JUDGE_SKIP_MIN_SCORE,
+    AGENT_LOOP_TOP_K,
+    AGENT_MAX_RETRIES,
     EMBEDDING_MODEL,
+    GITHUB_API_BASE,
+    GITHUB_OWNER,
+    GITHUB_PAT,
+    GITHUB_REPO,
     GROQ_MAX_RETRIES,
     GROQ_MODEL,
     POSTGRES_DB,
@@ -25,6 +35,7 @@ from ragkit.config import (
     POSTGRES_PORT,
     RERANK_CANDIDATES,
     RERANKER_MODEL,
+    RETRIEVAL_LANGUAGE,
     RETRIEVAL_TOP_K,
 )
 
@@ -56,8 +67,8 @@ CHUNK_SIZE_TARGET: int = int(os.getenv("CHUNK_SIZE_TARGET", "650"))
 CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "75"))
 
 # --- Retrieval ---
-# RETRIEVAL_TOP_K is owned by ragkit.config (imported above).
-RETRIEVAL_LANGUAGE: str = os.getenv("RETRIEVAL_LANGUAGE", "en")
+# RETRIEVAL_TOP_K and RETRIEVAL_LANGUAGE are owned by ragkit.config
+# (imported above).
 
 # --- Reranking (PLAN §H finding 1) ---
 RERANK_ENABLED: bool = os.getenv("RERANK_ENABLED", "0") == "1"
@@ -117,77 +128,28 @@ HYBRID_WEIGHT_LEXICAL: float = float(os.getenv("HYBRID_WEIGHT_LEXICAL", "1.0"))
 """Relative weight of the lexical half in RRF fusion (see vector weight)."""
 
 # --- Phase 2: Agentic retrieval (SPEC §4.3, PLAN §3.5) ---
-AGENT_MAX_RETRIES: int = int(os.getenv("AGENT_MAX_RETRIES", "2"))
-"""Maximum judge/reformulate iterations before the agent refuses (SPEC §4.1)."""
-
-AGENT_LOOP_TOP_K: int = int(os.getenv("AGENT_LOOP_TOP_K", "5"))
-"""Retrieval count used inside the agentic loop (the agentic retrieve calls)
-when the caller did not override ``top_k``.  The direct/fast path keeps
-``RETRIEVAL_TOP_K`` (5).  Phase 5 hardening (SPEC §7 amendment 2026-09-09):
-the loop's context was broadened to 8 in Phase 2; Phase 5 shrinks it back to 5
-so the judge + answer prompts carry less context (latency lever), validated by
-the before/after §6.1 benchmark run."""
+# AGENT_MAX_RETRIES and AGENT_LOOP_TOP_K are owned by ragkit.config (imported
+# above).  AGENT_LOOP_TOP_K = 5: Phase 5 shrunk the loop context back to 5
+# (latency lever validated by the before/after §6.1 benchmark run).
 
 AGENT_DEFAULT_STRATEGY: str = os.getenv("AGENT_DEFAULT_STRATEGY", "auto")
 """Default ``ask --strategy`` when the flag is not given (``auto|direct|agentic``)."""
 
-AGENT_JUDGE_SKIP_MIN_SCORE: float = float(os.getenv("AGENT_JUDGE_SKIP_MIN_SCORE", "0.0"))
-"""Fast-path judge skip (SPEC §7 amendment 2026-09-09).
+# AGENT_JUDGE_SKIP_MIN_SCORE is owned by ragkit.config (imported above);
+# WI-1 evidence gate (2026-09-12): threshold locked at 0.0 — every tested
+# threshold regressed correctness (PLAN §6.5.2).
 
-When ``0.0`` (default) the agentic loop always runs the judge LLM call — Phase
-2/4 behaviour unchanged.  When ``> 0``, the retrieve node marks
-``skip_judge`` when the top retrieval score clears the threshold and the graph
-routes straight to the answer node (one LLM call saved per question).
+# AGENT_JUDGE_MODEL and AGENT_JUDGE_SCORE_FLOOR are owned by ragkit.config
+# (imported above).  SCORE_FLOOR: score-floor sanity backstop, disabled at 0.0.
 
-**WI-1 evidence gate (2026-09-12, gpt-oss-120b, n=30×4):** every threshold
-tested (0.5, 0.6, 0.7) regressed correctness vs the 0.0 baseline:
-0.900 → 0.833 / 0.783 / 0.733.  The live-state category (bl01–bl04) is
-systematically broken because the judge gate is the only trigger for the
-GitHub tool call; skipping it drops tool_calls from 0.20 → 0.00 and causes
-correct→refused/partial flips on all four live-state rows.  No threshold
-meets the "no regression" gate.  Threshold remains locked at 0.0."""
-
-AGENT_JUDGE_MODEL: str = os.getenv("AGENT_JUDGE_MODEL", "")
-"""Optional separate Groq model for the judge; empty string → ``GROQ_MODEL``."""
-
-AGENT_JUDGE_SCORE_FLOOR: float = float(os.getenv("AGENT_JUDGE_SCORE_FLOOR", "0.0"))
-"""Score-floor sanity backstop for the LLM sufficiency judge.
-
-``0.0`` (default) disables it — the loop is identical to Phase 2/4/5
-behaviour.  When ``> 0``, :class:`ScoreFloorBackstopJudge` (agent/judge.py)
-forces an ``"insufficient"`` verdict whenever the top retrieval score is
-below the floor (or retrieval is empty), so the loop can never route
-straight to ``answer`` on thin evidence — a heuristic cross-check on the
-LLM-as-judge.  Tool and retry signals are preserved, so live-state questions
-still reach the GitHub tool.  Pre-Phase-6 hardening (PLAN §H finding 6);
-enabled only if the expanded benchmark run justifies a value."""
-
-AGENT_GATE_LONG_THRESHOLD: int = int(os.getenv("AGENT_GATE_LONG_THRESHOLD", "18"))
-"""Word-count gate trigger.
-
-Wired into ``HeuristicQueryClassifier`` (agent/gate.py) — the classifier's
-constructor reads this key when no explicit threshold is passed (and env
-``AGENT_GATE_LONG_THRESHOLD`` overrides the code default).  The threshold is a
-heuristic (word count > this fires the ``long_question`` complexity signal);
-routing calibration against a larger eval set is a pre-Phase-6 hardening
-follow-up (PLAN §H)."""
+# AGENT_GATE_LONG_THRESHOLD is owned by ragkit.config (imported above): the
+# word-count trigger wired into the heuristic query classifier when no
+# explicit threshold is passed.
 
 # --- Phase 3: GitHub tool (SPEC §5, PLAN §4) ---
-GITHUB_PAT: str = os.getenv("GITHUB_PAT", "")
-"""GitHub Personal Access Token (optional — empty by default).
-
-An empty PAT disables the GitHub tool: it returns a non-``ok`` ToolResult and
-never makes an HTTP call (locked decision, PLAN §4).  Never log this value.
-"""
-
-GITHUB_API_BASE: str = os.getenv("GITHUB_API_BASE", "https://api.github.com")
-"""GitHub REST API base URL — defaults to the public ``api.github.com``."""
-
-GITHUB_OWNER: str = os.getenv("GITHUB_OWNER", "")
-"""Default repository owner for the GitHub tool (e.g. ``fastapi``)."""
-
-GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")
-"""Default repository name for the GitHub tool (e.g. ``fastapi``)."""
+# GITHUB_PAT / GITHUB_API_BASE / GITHUB_OWNER / GITHUB_REPO are owned by
+# ragkit.config (imported above).  An empty PAT disables the tool (never
+# logged); it is never a hard-required secret (no ``_require``).
 
 # --- Phase 6: Code generation / validation (SPEC §8, PLAN §7) ---
 CODE_ROUTE_ENABLED: bool = os.getenv("CODE_ROUTE_ENABLED", "0") == "1"

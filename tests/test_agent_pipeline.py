@@ -1,6 +1,6 @@
 """Hermetic tests for the agentic pipeline + CLI strategy surface (PLAN §3.6).
 
-Exercises :func:`docpilot.agent.pipeline_agentic.agentic_ask` and the CLI's
+Exercises :func:`ragkit.agent.pipeline_agentic.agentic_ask` and the CLI's
 ``ask --strategy`` surface with injected fakes only — no network, no DB, no
 live LLM. Covers:
 
@@ -19,13 +19,14 @@ import json
 
 import pytest
 
-from docpilot import cli, config
-from docpilot.agent.pipeline_agentic import AgenticAgent, agentic_ask
-from docpilot.agent.types import Judgment
+from docpilot import cli
+from ragkit import config
+from ragkit.agent.pipeline_agentic import AgenticAgent, agentic_ask
+from ragkit.agent.types import Judgment
 from ragkit.citations.engine import StandardCitationEngine
 from docpilot.pipeline_ask import ask as pipeline_ask
 from ragkit.retrieval.retriever import SimpleRetriever
-from docpilot.tools import ToolResult
+from ragkit.tools import ToolResult
 
 from test_pipeline_e2e import (
     FIXTURE_DOCS,
@@ -33,7 +34,7 @@ from test_pipeline_e2e import (
     FakeGenerator,
     InMemoryVectorStore,
 )
-from test_agent_graph import (
+from ragkit.testing import (
     FakeRetriever,
     StubJudge,
     StubTool,
@@ -485,7 +486,7 @@ def test_default_judge_is_cached_across_calls(monkeypatch) -> None:
     The second call must reuse the cached instance from ``_get_default_judge``
     rather than calling ``_build_default_judge`` again (WI-2).
     """
-    from docpilot.agent.pipeline_agentic import _build_default_judge
+    from ragkit.agent.pipeline_agentic import _build_default_judge
 
     build_count = 0
 
@@ -495,12 +496,12 @@ def test_default_judge_is_cached_across_calls(monkeypatch) -> None:
         return StubJudge([Judgment(verdict="sufficient", reason="cached judge")])
 
     monkeypatch.setattr(
-        "docpilot.agent.pipeline_agentic._build_default_judge",
+        "ragkit.agent.pipeline_agentic._build_default_judge",
         _counting_build,
     )
     # Clear the cache so the first call actually exercises the builder path.
     monkeypatch.setattr(
-        "docpilot.agent.pipeline_agentic._DEFAULT_JUDGE_CACHE",
+        "ragkit.agent.pipeline_agentic._DEFAULT_JUDGE_CACHE",
         {},
     )
 
@@ -544,7 +545,7 @@ def test_compiled_graph_is_reused_across_calls(monkeypatch) -> None:
     """
     from collections import OrderedDict
 
-    from docpilot.agent.graph import build_graph as real_build_graph
+    from ragkit.agent.graph import build_graph as real_build_graph
 
     build_count = 0
 
@@ -554,12 +555,12 @@ def test_compiled_graph_is_reused_across_calls(monkeypatch) -> None:
         return real_build_graph(**kwargs)
 
     monkeypatch.setattr(
-        "docpilot.agent.pipeline_agentic.build_graph",
+        "ragkit.agent.pipeline_agentic.build_graph",
         _counting_build,
     )
     # Clear the cache so the first call actually exercises the builder path.
     monkeypatch.setattr(
-        "docpilot.agent.pipeline_agentic._COMPILED_GRAPH_CACHE",
+        "ragkit.agent.pipeline_agentic._COMPILED_GRAPH_CACHE",
         OrderedDict(),
     )
     # Keep the tool out of the loop (all-defaults tool creation would give a

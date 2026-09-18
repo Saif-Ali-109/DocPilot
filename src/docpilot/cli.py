@@ -166,8 +166,8 @@ def _run_ingest(args: argparse.Namespace, injected: dict[str, Any]) -> int:
 
 def _run_ask(args: argparse.Namespace, injected: dict[str, Any]) -> int:
     from docpilot import config
-    from docpilot.agent.graph import trace_step_to_dict
-    from docpilot.agent.pipeline_agentic import agentic_ask
+    from ragkit.agent.graph import trace_step_to_dict
+    from ragkit.agent.pipeline_agentic import agentic_ask
 
     kwargs = {k: injected[k] for k in _ASK_INJECTION_KEYS if k in injected}
     strategy = args.strategy if args.strategy is not None else config.AGENT_DEFAULT_STRATEGY

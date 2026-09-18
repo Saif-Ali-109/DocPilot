@@ -19,7 +19,7 @@ import numpy as np
 from ragkit.citations.engine import StandardCitationEngine
 from ragkit.core.models import Chunk, Document, RetrieverResult, source_language
 from ragkit.embeddings.provider import EmbeddingProvider
-from ragkit.generation.generator import Generator
+from ragkit.testing import FakeGenerator
 from ragkit.ingestion.chunker import MarkdownChunker
 from ragkit.ingestion.loader import DocumentLoader
 from ragkit.ingestion.parser import MarkdownParser
@@ -251,37 +251,6 @@ class FakeLoader(DocumentLoader):
 
     def load(self) -> list[Document]:
         return list(self._documents)
-
-
-class FakeGenerator(Generator):
-    """Canned-response generator that records what it was given."""
-
-    def __init__(self, response: str = "") -> None:
-        self.response = response
-        self.calls = 0
-        self.last_prompt: str | None = None
-        self.last_context: str | None = None
-        self.last_sources: str | None = None
-        self.last_question: str | None = None
-
-    def generate(self, prompt: str) -> str:
-        self.calls += 1
-        self.last_prompt = prompt
-        return self.response
-
-    def generate_answer(
-        self, context_text: str, sources_text: str, question: str
-    ) -> str:
-        from ragkit.generation.prompts import SYSTEM_PROMPT
-
-        self.calls += 1
-        self.last_context = context_text
-        self.last_sources = sources_text
-        self.last_question = question
-        self.last_prompt = SYSTEM_PROMPT.format(
-            context=context_text, sources=sources_text, question=question
-        )
-        return self.response
 
 
 def build_ask_wiring() -> tuple[SimpleRetriever, FakeGenerator, InMemoryVectorStore]:

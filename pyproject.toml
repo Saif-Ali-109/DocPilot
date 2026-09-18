@@ -12,8 +12,10 @@ dependencies = [
     # (dogfood) — no copied modules in src/docpilot/. Pinned to the exact
     # ragkit commit; updated to the `v0.1.0` tag at Stage-1 close
     # (PLAN §8.5 version pairing). S1-T8: pinned to tag `v0.1.0`
-    # (ragkit @ Stage-1 complete).
-    "ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@v0.1.0",
+    # (ragkit @ Stage-1 complete). S2-T3: pinned to S2-T2 commit `3ded3fb`
+    # (ragkit agentic layer + tools moved; DocPilot deletes its copies and
+    # imports ragkit.agent.* / ragkit.tools.* — retagged `v0.2.0` at S2-T5).
+    "ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@3ded3fb",
     "torch==2.14.0+cpu",
     "psycopg[binary]>=3.2.0",
     "pgvector>=0.3.0",

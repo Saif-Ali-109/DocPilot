@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from docpilot import config
-from docpilot.agent.gate import _normalise
+from ragkit.agent.gate import _normalise
 from docpilot.validation.verdict import (
     CheckStatus,
     ValidationVerdict,
