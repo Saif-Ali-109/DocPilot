@@ -1312,12 +1312,19 @@ flips pending.
       361). Note: ragkit's live-PG integration tests now hermetic-skip under
       a bare environment (ragkit no longer borrows DocPilot's `.env`) — that
       is the S1-T5 hermetic-standalone target.
-- [ ] S1-T5: ragkit standalone test suite green (moved tests + interface
-      tests, hermetic — no model/network)
-- [ ] S1-T6: combined DocPilot + ragkit suite green on ragkit imports
-      (≥ baseline 552; unit tests live in ragkit only)
-- [ ] S1-T7: retrieval parity evidence: same-process `ask()` top-k identical
+- [x] S1-T5: ragkit standalone test suite green (moved tests + interface
+      tests, hermetic — no model/network) — DONE 2026-09-18: 181 passed, 10
+      hermetic skips (1 real-corpus-not-cloned, 6 live-PG, 3 maintenance
+      integration); totals unchanged with a dev `.env` (190 passed, 1 skipped)
+- [x] S1-T6: combined DocPilot + ragkit suite green on ragkit imports
+      (≥ baseline 552; unit tests live in ragkit only) — DONE 2026-09-18:
+      ragkit 191 + DocPilot 361 = 552, re-verified at final committed state
+- [x] S1-T7: retrieval parity evidence: same-process `ask()` top-k identical
       to pre-extraction (reuse the parity-harness pattern); one CLI/API smoke
+      — DONE 2026-09-18: live same-process run (`docpilot@69f91dc` worktree
+      vs `docpilot@1e5576b` + ragkit), 30 benchmark queries → 30/30 top-k
+      IDENTICAL; evidence + harness committed in `ragkit/parity/`; CLI/API
+      smoke exit 0 with cited answer
 - [x] S1-T8: exit sweep — DONE 2026-09-18: READMEs updated (DocPilot
       references ragkit core; ragkit v0.1.0 / install snippet); clean-venv
       install from git `@v0.1.0` verified (`import ragkit` + `ragkit.config`
