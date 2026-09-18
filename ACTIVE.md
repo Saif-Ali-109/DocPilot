@@ -133,6 +133,14 @@ last_updated: 2026-09-17
   tagged + pushed on ragkit, DocPilot pin → `@v0.1.0`, §8.5 all `[x]`,
   `phase-7` tag cut). **Stage 1 COMPLETE — paused for review before Stage 2
   (agentic).**
+- 2026-09-18 post-close: independent audit of Stage 1 — merge-ready, no
+  blockers; stale §8.3 S1-T5/T6/T7 checkboxes ticked (`391ebc8`); ragkit
+  conftest gained optional repo-root `.env` loading (9 live-PG tests run on
+  dev machines: ragkit 190+1 there, 181+10 hermetic — totals identical).
+- 2026-09-18 S2-T1: Stage 2 (agentic) kicked off — task list + exit criteria
+  written (§8.7/§8.7b); ragkit PLAN §3 mirrors it; ACTIVE refreshed. Next:
+  S2-T2 — mechanical move of `agent/*` (minus `code_route.py`) + `tools/*`
+  into ragkit.
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
   WI-1 judge-skip gate decided (threshold 0.0 locked), Phase 6 signed off
   AND exited (§7.5 sweep + tag). No other open gates; levers stay OFF
@@ -154,7 +162,7 @@ Core (always) + current-phase bundle; all other rows on demand.
 | PLAN.md | §1 meta | 11–34 | core — always |
 | PLAN.md | §6.5 pre-Phase-6 hardening evidence | 915–1087 | on-demand: Phase-6 evidence |
 | PLAN.md | §7 Phase 6 plan (gated) incl. §7.5 exit criteria | 1088–1229 | on-demand: completed-phase history |
-| PLAN.md | §8 framework extraction (Stage 1 core chain) | 1231–1323 | current-phase — always |
+| PLAN.md | §8 framework extraction — Stage 2 (agentic) active | 1231–1418 | current-phase — always |
 | PLAN.md | §9 architectural discipline | 1324–1346 | core — always |
 | PLAN.md | §10 conflict resolution | 1348–1358 | core — always |
 | PLAN.md | §11 git_workflow | 1359–1391 | core — always |

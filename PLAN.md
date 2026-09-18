@@ -1229,9 +1229,8 @@ flips pending.
   (AGENTS.md build-order rule 1)
 
 ## 8. framework_extraction
-- status: Stage 1 COMPLETE (2026-09-18; §8.5 all `[x]`, `v0.1.0` tag +
-  `phase-7` tag cut). Next: Stage 2 — agentic layer (planned, §8.4) — paused
-  for review after Stage-1 close.
+- status: Stage 2 ACTIVE (started 2026-09-18 — Stage-1 close reviewed by an
+  independent audit: merge-ready, no blockers; tasks §8.7)
 - repo: https://github.com/Saif-Ali-109/ragkit.git — NEW separate repo (branch
   main). The framework is NOT a DocPilot subpackage. DocPilot depends on it
   and dogfoods it.
@@ -1334,7 +1333,8 @@ flips pending.
 
 ### 8.4 deferred stages (planned, NOT this phase)
 - Stage 2 — agentic: `agent/*`, `tools/*` (GitHub Tool), langgraph dep moves
-  to ragkit; gate = full suite green + agentic parity sample
+  to ragkit; gate = full suite green + agentic parity sample (execution order
+  §8.7)
 - Stage 3 — eval: `eval/{benchmark,triples,__main__,judge_ab,
   tool_necessity}.py` (Evaluator + checkpointed/TPD-aware harness) → ragkit.eval
 - Stage 4 — codegen: `codegen/*`, `validation/*`, `agent/code_route.py`
@@ -1368,6 +1368,53 @@ flips pending.
 - rerank/hybrid lever re-evaluation — levers stay OFF (Phase 6 gate verdict)
 - CI, PyPI publishing, docs site
 - git-history rewrite of either repo
+
+### 8.7 stage-2 tasks (agentic — execution order)
+- [ ] S2-T1: docs — scope + task list (this section) + ACTIVE refresh;
+      committed in both repos. Bundle: `agent/*` (except `code_route.py` →
+      Stage 4), `tools/*` (GitHub Tool), langgraph dep.
+- [ ] S2-T2: move mechanically (prefix swap `docpilot.` → `ragkit.`) into
+      `ragkit.agent` / `ragkit.tools`. `ragkit.config` gains the 10 framework
+      keys the moved modules read — `AGENT_MAX_RETRIES`, `AGENT_LOOP_TOP_K`,
+      `AGENT_JUDGE_SKIP_MIN_SCORE`, `AGENT_JUDGE_MODEL`,
+      `AGENT_JUDGE_SCORE_FLOOR`, `AGENT_GATE_LONG_THRESHOLD`,
+      `RETRIEVAL_LANGUAGE`, `GITHUB_PAT` (optional, default ""),
+      `GITHUB_API_BASE`, `GITHUB_OWNER`, `GITHUB_REPO` — env-read safe
+      defaults identical to today; DocPilot stays functional through
+      re-export later (S2-T3). `graph.py` `_NO_CONTEXT_NOTE` now imports from
+      `ragkit.core.direct` (no docpilot reverse dep). `langgraph>=1.2.11`
+      dep moves to ragkit (lazy — only `graph.py` imports it). 6 agent/tool
+      unit-test files move (`test_agent_gate/graph/judge/phase5_hooks/types`,
+      `test_tools_github` — all hermetic: injected fakes, no network/DB/LLM);
+      GITHUB_PAT patch sites point at `ragkit.config`.
+- [ ] S2-T3: DocPilot dogfood — rewire `cli.py`, `api/service.py`,
+      `eval/{benchmark,judge_ab,tool_necessity}.py`, `agent/code_route.py`
+      and the staying tests (`test_agent_pipeline.py`,
+      `test_eval_tool_necessity.py`, incl. GITHUB_PAT patch sites →
+      `ragkit.config`) to `ragkit.agent.*` / `ragkit.tools.*`; delete the
+      moved modules + tests from `src/docpilot/`; DocPilot `config.py`
+      re-exports the 10 keys (rationale docstrings stay DocPilot-side as
+      comments); pyproject pin bump. Combined suite green.
+- [ ] S2-T4: agentic parity evidence — hermetic determinism harness (injected
+      fakes, fixed query set covering direct/agentic routing, judge retry
+      path, tool-needed live path via fake tool): full trace/decision output
+      identical `docpilot.agent` (worktree @ Stage-2 start `391ebc8`) vs
+      `ragkit.agent`; + one live CLI/API smoke (`docpilot ask --strategy
+      agentic`).
+- [ ] S2-T5: exit sweep — READMEs honest (DocPilot built on ragkit agentic
+      core; ragkit status Stage 2), clean-venv install from git (langgraph
+      dep resolved), tag ragkit `v0.2.0`, DocPilot pin → `@v0.2.0`, stage-2
+      exit criteria §8.7b all `[x]`, both repos pushed, no secrets.
+
+### 8.7b stage-2 exit criteria (checked at stage close, mirror §8.5 style)
+- [ ] ragkit standalone test suite green (agent + tools tests included,
+      hermetic — no model/network; live-PG tests skip as before)
+- [ ] combined DocPilot + ragkit suite green; moved unit tests live in
+      ragkit only, no duplicated test files
+- [ ] agentic parity evidence committed (hermetic harness verdict + live
+      smoke output)
+- [ ] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag
+      `v0.2.0`); READMEs honest; no secrets; both repos pushed to origin/main
 
 ## 9. architectural_discipline
 - interfaces:
