@@ -11,8 +11,9 @@ dependencies = [
     # Phase 7 (S1-T3): DocPilot consumes the extracted ragkit core chain
     # (dogfood) — no copied modules in src/docpilot/. Pinned to the exact
     # ragkit commit; updated to the `v0.1.0` tag at Stage-1 close
-    # (PLAN §8.5 version pairing).
-    "ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@ed0f908",
+    # (PLAN §8.5 version pairing). S1-T4: @34686e2 = ragkit owns framework
+    # config + db maintenance.
+    "ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@34686e2",
     "torch==2.14.0+cpu",
     "psycopg[binary]>=3.2.0",
     "pgvector>=0.3.0",
