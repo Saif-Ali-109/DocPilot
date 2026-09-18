@@ -17,15 +17,14 @@ last_updated: 2026-09-17
 ## 1. Status
 
 - current_phase: **7 — Framework Extraction (ragkit), ACTIVE** (entered
-  2026-09-17; milestone `phase-7-start` → `phase-7` per PLAN §8.5). Phase 6
-  remains COMPLETE (phase-6 tag cut 2026-09-12); extraction is the final step
-  of the SPEC §2 build order. Decisions 2026-09-17: separate ragkit repo,
-  DocPilot dogfoods ragkit, core chain first, installable-no-CI. Stage 1 per
-  PLAN §8.3.
-- last_updated: 2026-09-17
+  2026-09-17). **Stage 1 (core chain) COMPLETE 2026-09-18 (`v0.1.0`). Stage 2
+  (agentic) COMPLETE 2026-09-18 (`v0.2.0`, DocPilot pinned `@v0.2.0`). Next:
+  Stage 3 — eval harness, then Stage 4 — codegen — both start on user go.**
+- last_updated: 2026-09-18
 - servers: uvicorn :8000 (`/api/v1/health` — store ok, ~15.3k chunks; serves
   `POST /api/v1/code`), chainlit :8050 — keep both healthy.
-- test baseline: 550 passing (Phase 1–5 suites + WI batch + T1–T7).
+- test baseline: **combined 552** (ragkit 299 + DocPilot 252; 109 tests
+  relocated zero loss).
 
 ### Gate status (resolved 2026-09-12)
 
@@ -138,13 +137,31 @@ last_updated: 2026-09-17
   conftest gained optional repo-root `.env` loading (9 live-PG tests run on
   dev machines: ragkit 190+1 there, 181+10 hermetic — totals identical).
 - 2026-09-18 S2-T1: Stage 2 (agentic) kicked off — task list + exit criteria
-  written (§8.7/§8.7b); ragkit PLAN §3 mirrors it; ACTIVE refreshed. Next:
-  S2-T2 — mechanical move of `agent/*` (minus `code_route.py`) + `tools/*`
-  into ragkit.
-- Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
-  WI-1 judge-skip gate decided (threshold 0.0 locked), Phase 6 signed off
-  AND exited (§7.5 sweep + tag). No other open gates; levers stay OFF
-  permanently on this corpus.
+  written (§8.7/§8.7b); ragkit PLAN §3 mirrors it; ACTIVE refreshed.
+- 2026-09-18 S2-T2: mechanical move — `docpilot.agent` → `ragkit.agent`,
+  `docpilot.tools` → `ragkit.tools` (prefix swap); `ragkit.config` extended
+  with 10 keys; langgraph dep added; 6 hermetic agent/tool test files moved.
+  `3ded3fb` — ragkit 299 passed/1 skipped, 290/10 hermetic.
+- 2026-09-18 S2-T3: DocPilot dogfood — `src/docpilot/` + `tests/` imports
+  rewired to `ragkit.agent.*` / `ragkit.tools.*`; moved modules + 6 test
+  files deleted; DocPilot config re-exports the 10 keys; pin → `@3ded3fb`.
+  DocPilot 252 + ragkit 300 = 552.
+- 2026-09-18 S2-T4: agentic parity evidence — hermetic determinism harness
+  (fakes, fixed queries: routing, judge-retry, fake-tool live path): full
+  trace identical pre (`docpilot.agent` @ Stage-2 start `391ebc8`) vs post
+  (`ragkit.agent`). 6/6 scenarios IDENTICAL + one live CLI smoke (`docpilot
+  ask --strategy agentic`, exit 0). Evidence: `ragkit/parity/s2_*`.
+- 2026-09-18 S2-T5: exit sweep — READMEs honest, clean-venv install from git
+  `@v0.2.0` (deps incl. langgraph 1.2.11 resolved; imports OK; `docpilot`
+  not importable), tag `v0.2.0` (`500717d`), DocPilot pin → `@v0.2.0`,
+  §3.3 / §8.7b all `[x]`, both repos pushed. **Stage 2 COMPLETE.**
+- Stages 3 & 4 planned (§8.8/§8.9): Stage 3 moves `eval/benchmark`,
+  `triples`, `judge_ab`, `tool_necessity`, `__main__`/`__init__`, 3 dataset
+  JSONs → `ragkit.eval` (hermetic eval tests + parity gate). Stage 4 moves
+  `codegen/*`, `validation/*`, `agent/code_route.py`,
+  `eval/code_benchmark.py` + dataset → `ragkit.codegen` /
+  `ragkit.validation` / `ragkit.agent.code_route` / `ragkit.eval` (3
+  CODE_* config keys). Both stages: full parity harness + 1 live smoke each.
 
 ## 4. Load index — read ONLY these SPEC/PLAN lines
 
@@ -162,7 +179,9 @@ Core (always) + current-phase bundle; all other rows on demand.
 | PLAN.md | §1 meta | 11–34 | core — always |
 | PLAN.md | §6.5 pre-Phase-6 hardening evidence | 915–1087 | on-demand: Phase-6 evidence |
 | PLAN.md | §7 Phase 6 plan (gated) incl. §7.5 exit criteria | 1088–1229 | on-demand: completed-phase history |
-| PLAN.md | §8 framework extraction — Stage 2 (agentic) active | 1231–1418 | current-phase — always |
+| PLAN.md | §8 framework extraction — Stage 2 (agentic) done | 1231–1438 | completed-phase history |
+| PLAN.md | §8.8 stage-3 tasks (eval) | 1439–1480 | on-demand: stage-3 work |
+| PLAN.md | §8.9 stage-4 tasks (codegen) | 1481–1530 | on-demand: stage-4 work |
 | PLAN.md | §9 architectural discipline | 1324–1346 | core — always |
 | PLAN.md | §10 conflict resolution | 1348–1358 | core — always |
 | PLAN.md | §11 git_workflow | 1359–1391 | core — always |

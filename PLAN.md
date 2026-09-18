@@ -1436,6 +1436,78 @@ flips pending.
       imports OK; `docpilot` not importable — standalone); only
       never-commit files left dirty (eval reports, `opencode.jsonc`)
 
+### 8.8 stage-3 tasks (eval harness — execution order)
+
+- [ ] S3-T1: docs — scope + task list (this section) + ACTIVE refresh;
+      committed in both repos. Bundle: `eval/*` minus `code_benchmark.py` +
+      `reports/`; 3 dataset JSONs; `__main__` code-benchmark branch lazy-guards
+      with "moves in Stage 4" error.
+- [ ] S3-T2: move mechanically (prefix swap `docpilot.eval` → `ragkit.eval`)
+      into `ragkit.eval`: benchmark/triples/judge_ab/tool_necessity +
+      `__main__`/`__init__` + committed dataset JSONs; 3 hermetic eval test
+      files move (patch sites → `ragkit.config`); no new config keys or deps.
+- [ ] S3-T3: DocPilot dogfood — delete moved modules + tests from
+      `src/docpilot/`; rewire staying consumers to `ragkit.eval`;
+      `python -m docpilot.eval` workflow → `python -m ragkit.eval`;
+      pyproject pin bump; combined suite green.
+- [ ] S3-T4: eval parity evidence — hermetic determinism harness: fixed
+      dataset rows + stubbed retriever/generator/judge drive the eval
+      pipeline pre (`docpilot.eval` @ Stage-3 start worktree) vs post
+      (`ragkit.eval`) — report JSON identical field-for-field; + one live
+      TPD-aware eval smoke (one invocation).
+- [ ] S3-T5: exit sweep — READMEs honest (ragkit status Stage 3; DocPilot
+      callout eval moved), clean-venv install from git (regression — no new
+      deps), tag `v0.3.0`, DocPilot pin → `@v0.3.0`, §8.8b all `[x]`, both
+      repos pushed, no secrets.
+
+### 8.8b stage-3 exit criteria (checked at stage close, mirror §8.5 style)
+
+- [ ] ragkit standalone test suite green (eval tests included, hermetic —
+      no model/network; live-PG tests skip as before)
+- [ ] combined DocPilot + ragkit suite green; moved eval tests live in
+      ragkit only, no duplicated test files
+- [ ] eval parity evidence committed (hermetic report-JSON harness verdict
+      + live smoke output)
+- [ ] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag
+      `v0.3.0`); READMEs honest; no secrets; both repos pushed to origin/main
+
+### 8.9 stage-4 tasks (codegen — execution order)
+
+- [ ] S4-T1: docs — scope + task list (this section) + ACTIVE refresh,
+      committed in both repos. Bundle: `codegen/*`, `validation/*`,
+      `agent/code_route.py`, `eval/code_benchmark.py` + dataset.
+- [ ] S4-T2: move mechanically (prefix swap) into `ragkit.codegen` /
+      `ragkit.validation` / `ragkit.agent.code_route`; `ragkit.eval` gains
+      `code_benchmark` + `code_benchmark.json` (activates `__main__`
+      lazy-guard branch); `ragkit.config` gains `CODE_INTENT_PHRASES`,
+      `CODE_ROUTE_ENABLED`, `CODE_VALIDATE_MAX_TURNS`; 5 hermetic test files
+      move (patch sites → `ragkit.config`).
+- [ ] S4-T3: DocPilot dogfood — rewire `api/service.py` code endpoint + CLI
+      code paths + `test_api_code.py` to `ragkit.codegen` /
+      `ragkit.validation` / `ragkit.agent.code_route`; delete moved modules
+      + tests; config re-exports the 3 `CODE_*` keys; pin bump; combined
+      suite green.
+- [ ] S4-T4: codegen parity evidence — hermetic determinism harness:
+      stubbed generator/judge — validation verdicts + emitted code identical
+      pre (`docpilot.*` @ Stage-4 start worktree) vs post (`ragkit.*`); +
+      one live codegen smoke (TPD-aware, one invocation).
+- [ ] S4-T5: exit sweep — READMEs honest, clean-venv install from git
+      (regression), tag `v0.4.0`, DocPilot pin → `@v0.4.0`, §8.9b all `[x]`,
+      both repos pushed, no secrets; **all §8.4 bundles moved → extraction
+      complete**.
+
+### 8.9b stage-4 exit criteria (checked at stage close, mirror §8.5 style)
+
+- [ ] ragkit standalone test suite green (codegen/validation/code_route
+      tests included, hermetic)
+- [ ] combined DocPilot + ragkit suite green; moved tests live in ragkit
+      only
+- [ ] codegen parity evidence committed (hermetic harness verdict + live
+      smoke output)
+- [ ] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag
+      `v0.4.0`); READMEs honest; no secrets; both repos pushed to
+      origin/main; all deferred bundles moved
+
 ## 9. architectural_discipline
 - interfaces:
   - DocumentLoader
