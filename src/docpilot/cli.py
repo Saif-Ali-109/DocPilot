@@ -204,7 +204,7 @@ def _run_dedupe(args: argparse.Namespace, injected: dict[str, Any]) -> int:
     the ``chunks`` table and ensures the schema so ``chunks_unique_triple``
     is created. ``--dry-run`` only reports the duplicate count.
     """
-    from docpilot.db import maintenance
+    from ragkit.db import maintenance
     from ragkit.db.connection import ensure_schema, get_connection
 
     conn = injected.get("conn")

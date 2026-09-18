@@ -118,8 +118,14 @@ last_updated: 2026-09-17
   swap; moved suite green in the DocPilot venv — 182 passed, 1 skipped).
   S1-T3 DONE (DocPilot dogfood rewire: src + tests import `ragkit.*`; moved
   modules + 11 unit-test files deleted; pyproject pins ragkit `@ed0f908`;
-  DocPilot 369 + ragkit 183 = combined 552). Next: §8.3 S1-T4 connection
-  semantics + `db/maintenance.py` home.
+  DocPilot 369 + ragkit 183 = combined 552). S1-T4 DONE (connection
+  semantics ownership: `ragkit/config.py` owns the framework keys —
+  env-read, safe defaults, no hard-fail; core-chain modules read
+  `ragkit.config`, reverse dep gone; DocPilot re-exports non-secret keys and
+  loads `.env` before ragkit.config; `db/maintenance.py` moved to
+  `ragkit.db` — dedupe CLI now uses it; DocPilot 361 + ragkit 191 = combined
+  552; ragkit live-PG tests now hermetic-skip under a bare environment).
+  Next: §8.3 S1-T5 hermetic standalone suite.
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
   WI-1 judge-skip gate decided (threshold 0.0 locked), Phase 6 signed off
   AND exited (§7.5 sweep + tag). No other open gates; levers stay OFF

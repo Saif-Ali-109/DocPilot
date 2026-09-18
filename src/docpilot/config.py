@@ -10,6 +10,24 @@ from dotenv import load_dotenv
 _ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(_ENV_PATH)
 
+# Framework settings are owned by ragkit.config (single source of truth —
+# the core chain reads them from there). DocPilot re-exports the non-secret
+# keys so ``from docpilot import config`` keeps working unchanged. The
+# ``load_dotenv`` above MUST run first: ragkit.config reads os.environ at
+# import time and caches it. The secrets below stay DocPilot-owned because
+# they keep the fail-fast ``_require`` behaviour.
+from ragkit.config import (
+    EMBEDDING_MODEL,
+    GROQ_MAX_RETRIES,
+    GROQ_MODEL,
+    POSTGRES_DB,
+    POSTGRES_HOST,
+    POSTGRES_PORT,
+    RERANK_CANDIDATES,
+    RERANKER_MODEL,
+    RETRIEVAL_TOP_K,
+)
+
 
 def _require(key: str) -> str:
     val = os.getenv(key)
@@ -27,23 +45,18 @@ POSTGRES_USER: str = _require("POSTGRES_USER")
 POSTGRES_PASSWORD: str = _require("POSTGRES_PASSWORD")
 
 # --- Secrets (optional, sensible defaults) ---
-GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
-GROQ_MAX_RETRIES: int = int(os.getenv("GROQ_MAX_RETRIES", "3"))
+# GROQ_MODEL / GROQ_MAX_RETRIES are owned by ragkit.config (imported above).
 
 # --- Database ---
-POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
-POSTGRES_DB: str = os.getenv("POSTGRES_DB", "docpilot")
-
-# --- Embeddings ---
-EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+# POSTGRES_HOST / POSTGRES_PORT / POSTGRES_DB are owned by ragkit.config
+# (imported above).
 
 # --- Chunking ---
 CHUNK_SIZE_TARGET: int = int(os.getenv("CHUNK_SIZE_TARGET", "650"))
 CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "75"))
 
 # --- Retrieval ---
-RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "5"))
+# RETRIEVAL_TOP_K is owned by ragkit.config (imported above).
 RETRIEVAL_LANGUAGE: str = os.getenv("RETRIEVAL_LANGUAGE", "en")
 
 # --- Reranking (PLAN §H finding 1) ---
@@ -64,11 +77,8 @@ cross-encoder re-orders *worse* than plain cosine — recall drops 0.900→0.850
 in every rerank variant (prefixes/weights included) — and costs ~85 s/predict
 on this CPU.  It stays default-off by evidence, not by omission."""
 
-RERANKER_MODEL: str = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-base")
-"""Cross-encoder model for ``BCEReranker`` (downloaded lazily, CPU)."""
-
-RERANK_CANDIDATES: int = int(os.getenv("RERANK_CANDIDATES", "20"))
-"""Width of the candidate window fetched before reranking down to top_k."""
+# RERANKER_MODEL / RERANK_CANDIDATES are owned by ragkit.config (imported
+# above).
 
 # --- Hybrid retrieval (PLAN §H finding 2) ---
 HYBRID_ENABLED: bool = os.getenv("HYBRID_ENABLED", "0") == "1"

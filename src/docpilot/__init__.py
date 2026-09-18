@@ -6,6 +6,17 @@ via ``python -m docpilot`` (see :mod:`docpilot.__main__`).
 """
 
 import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load the project .env BEFORE anything can import ragkit.config (which reads
+# os.environ at import time and caches it). Importing any ``docpilot.*``
+# submodule runs this package init first, so the framework keys that ragkit
+# owns (POSTGRES_*, EMBEDDING_MODEL, GROQ_*, RERANK_*, RETRIEVAL_TOP_K) are
+# populated before a ragkit module first reads them.
+_ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(_ENV_PATH)
 
 from docpilot.cli import main
 

@@ -1263,9 +1263,9 @@ flips pending.
   - `citations/engine.py` — CitationEngine
   - `core/{models,direct}.py` — core types + direct orchestration
   - `db/connection.py` — pgvector connection layer (moves with the store)
+  - `db/maintenance.py` — corpus dedupe helpers (home decided at S1-T4: ragkit)
 - stays in DocPilot (app glue): `pipeline_ask.py`, `pipeline_ingest.py`,
-  `config.py`, `cli.py`, `__main__.py`, `api/*`, `ui/*`,
-  `db/maintenance.py` (homing decided at S1.3).
+  `config.py`, `cli.py`, `__main__.py`, `api/*`, `ui/*`.
 - ragkit pyproject: uv_build backend, python >=3.13, CPU-torch index (same
   `[[tool.uv.index]]` + `[tool.uv.sources]` pattern as DocPilot); deps:
   psycopg[binary], pgvector, sentence-transformers, groq, requests;
@@ -1297,8 +1297,20 @@ flips pending.
       deleted from DocPilot; pyproject pins
       `ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@ed0f908`;
       DocPilot suite green (369) with ragkit's 183 → combined 552
-- [ ] S1-T4: connection semantics: ragkit owns DSN→conn for PgVectorStore;
-      DocPilot delegates; decide `db/maintenance.py` home (DocPilot or ragkit)
+- [x] S1-T4: connection semantics: ragkit owns DSN→conn for PgVectorStore;
+      DocPilot delegates; decide `db/maintenance.py` home — DONE 2026-09-18:
+      ragkit.config now owns the framework keys the core chain reads
+      (POSTGRES_*, EMBEDDING_MODEL, GROQ_*, RERANKER_MODEL,
+      RERANK_CANDIDATES, RETRIEVAL_TOP_K) — env-read with safe defaults, no
+      import hard-fail, so ragkit imports standalone; core-chain modules read
+      `ragkit.config` (reverse docpilot dependency gone); DocPilot config
+      re-exports the non-secret keys and `docpilot/__init__.py` loads `.env`
+      before any ragkit.config read; `db/maintenance.py` + its SQL/
+      integration tests moved into ragkit; CLI dedupe uses
+      `ragkit.db.maintenance`. Combined 552 green (ragkit 191 / DocPilot
+      361). Note: ragkit's live-PG integration tests now hermetic-skip under
+      a bare environment (ragkit no longer borrows DocPilot's `.env`) — that
+      is the S1-T5 hermetic-standalone target.
 - [ ] S1-T5: ragkit standalone test suite green (moved tests + interface
       tests, hermetic — no model/network)
 - [ ] S1-T6: combined DocPilot + ragkit suite green on ragkit imports
