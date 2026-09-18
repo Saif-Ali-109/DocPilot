@@ -125,7 +125,14 @@ last_updated: 2026-09-17
   loads `.env` before ragkit.config; `db/maintenance.py` moved to
   `ragkit.db` — dedupe CLI now uses it; DocPilot 361 + ragkit 191 = combined
   552; ragkit live-PG tests now hermetic-skip under a bare environment).
-  Next: §8.3 S1-T5 hermetic standalone suite.
+  S1-T5/T6/T7 DONE (standalone hermetic suite green 181+10-skips; combined
+  552 re-verified; retrieval parity evidence — 30 benchmark queries top-k
+  IDENTICAL pre/post, live same-process run at `docpilot@69f91dc` vs
+  `docpilot@ebbdefa`+`ragkit@34686e2`; CLI smoke exit 0). S1-T8 DONE (exit
+  sweep: READMEs honest, clean-venv install from git verified, `v0.1.0`
+  tagged + pushed on ragkit, DocPilot pin → `@v0.1.0`, §8.5 all `[x]`,
+  `phase-7` tag cut). **Stage 1 COMPLETE — paused for review before Stage 2
+  (agentic).**
 - Blockers cleared 2026-09-12: hybrid gate decided (HYBRID stays OFF),
   WI-1 judge-skip gate decided (threshold 0.0 locked), Phase 6 signed off
   AND exited (§7.5 sweep + tag). No other open gates; levers stay OFF

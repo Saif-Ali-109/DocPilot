@@ -1229,8 +1229,9 @@ flips pending.
   (AGENTS.md build-order rule 1)
 
 ## 8. framework_extraction
-- status: ACTIVE (entered 2026-09-17; milestone `phase-7-start` → `phase-7`
-  cut when §8.5 is all `[x]`)
+- status: Stage 1 COMPLETE (2026-09-18; §8.5 all `[x]`, `v0.1.0` tag +
+  `phase-7` tag cut). Next: Stage 2 — agentic layer (planned, §8.4) — paused
+  for review after Stage-1 close.
 - repo: https://github.com/Saif-Ali-109/ragkit.git — NEW separate repo (branch
   main). The framework is NOT a DocPilot subpackage. DocPilot depends on it
   and dogfoods it.
@@ -1317,9 +1318,12 @@ flips pending.
       (≥ baseline 552; unit tests live in ragkit only)
 - [ ] S1-T7: retrieval parity evidence: same-process `ask()` top-k identical
       to pre-extraction (reuse the parity-harness pattern); one CLI/API smoke
-- [ ] S1-T8: exit sweep: READMEs honest (DocPilot built on ragkit core),
-      ragkit tag `v0.1.0`, DocPilot pin recorded, §8.5 all `[x]`, cut
-      `phase-7` tag
+- [x] S1-T8: exit sweep — DONE 2026-09-18: READMEs updated (DocPilot
+      references ragkit core; ragkit v0.1.0 / install snippet); clean-venv
+      install from git `@v0.1.0` verified (`import ragkit` + `ragkit.config`
+      safe defaults work in a deps-free venv). DocPilot pyproject pin bumped
+      to `@v0.1.0`; `git tag -a v0.1.0` pushed to ragkit; both repos pushed
+      to origin/main; no secrets in commits. Combined 552 green re-verified.
 
 ### 8.4 deferred stages (planned, NOT this phase)
 - Stage 2 — agentic: `agent/*`, `tools/*` (GitHub Tool), langgraph dep moves
@@ -1332,17 +1336,25 @@ flips pending.
   hygiene
 
 ### 8.5 exit criteria (Stage 1 — checked at phase close, mirror §7.5 style)
-- [ ] ragkit repo live; installable from git (`uv pip install` or pip); a
-      fresh `python -c "import ragkit"` works from a clean venv
-- [ ] DocPilot has zero copies of the moved modules — grep shows no
+- [x] ragkit repo live; installable from git (`uv pip install` or pip); a
+      fresh `python -c "import ragkit"` works from a clean venv — DONE
+      (clean-venv, `--no-deps`, `v0.1.0` tag: `import ragkit`, `from ragkit
+      import config` both succeed with safe defaults)
+- [x] DocPilot has zero copies of the moved modules — grep shows no
       `docpilot.(ingestion|embeddings|retrieval|reranking|generation|
-      citations|core|db.connection)` import left in `src/`; no shims
-- [ ] ragkit standalone test suite green
-- [ ] combined DocPilot + ragkit suite green (≥ baseline 552; unit tests
-      live in ragkit only, no duplicated test files)
-- [ ] retrieval parity evidence committed (identical top-k pre/post)
-- [ ] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag);
-      no secrets; both repos pushed to origin/main
+      citations|core|db.connection)` import left in `src/`; no shims — DONE
+      (grep-verified at T3 and T4)
+- [x] ragkit standalone test suite green — DONE (S1-T5: 181 passed, 10
+      hermetic skips)
+- [x] combined DocPilot + ragkit suite green (≥ baseline 552; unit tests
+      live in ragkit only, no duplicated test files) — DONE (ragkit 191 +
+      DocPilot 361 = 552, verified after S1-T4 and S1-T7)
+- [x] retrieval parity evidence committed (identical top-k pre/post) — DONE
+      (S1-T7: 30/30 queries top-k IDENTICAL, live same-process pre/post run;
+      harness + evidence in `ragkit/parity/`; CLI smoke exit 0)
+- [x] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag);
+      no secrets; both repos pushed to origin/main — DONE (`pin@v0.1.0` ↔
+      `tag v0.1.0` on ragkit; both repos pushed; eval reports unchanged)
 
 ### 8.6 non-scope / deferred (decide later, not now)
 - any feature change or behavior improvement while extracting (refactor only)

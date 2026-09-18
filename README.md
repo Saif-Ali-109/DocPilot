@@ -3,7 +3,7 @@ title: DocPilot — README
 role: human-facing overview — keep claims honest, no contracts
 authority: none — informational
 load: not needed for agent sessions
-last_updated: 2026-09-11
+last_updated: 2026-09-18
 ---
 
 # DocPilot
@@ -13,6 +13,8 @@ An evidence-driven agentic RAG system for technical documentation.
 DocPilot ingests Markdown/MDX documentation (code blocks, nested headings, cross-references) and answers questions using retrieved evidence. Rather than naive retrieve-and-answer, it evaluates whether its evidence is sufficient, retries searches when it isn't, and says **"I don't know"** rather than hallucinating. Every retrieval and tool decision is loggable and inspectable.
 
 > **Status:** Phases 1–6 complete (Classic RAG → Agentic Retrieval → GitHub tooling → Evaluation → API/UI → Code generation/validation), plus the pre-Phase-6 hardening batch (Plan §H): cross-encoder reranking, hybrid vector+FTS retrieval, gate-knob wiring, judge score-floor backstop, and a benchmark expansion to 30 questions. Phase 6 (code) is an **explicit opt-in** route — generate → validate against the retrieved docs → return only validated code, otherwise refuse with sources; it never changes the plain ask path. Levers ship default-OFF; the gate benchmark decides whether to flip them on. See [PLAN.md](PLAN.md) for the build plan and [SPEC.md](SPEC.md) for the authoritative specification.
+
+> **Core framework (Phase 7, Stage 1 complete):** the reusable RAG core (ingestion → embeddings → vector store → retrieval → generation → citations) now lives in the separate [ragkit](https://github.com/Saif-Ali-109/ragkit) package (v0.1.0; pinned in `pyproject.toml`), and DocPilot consumes it (dogfood) — no copied modules. Removal was validated by the combined suite staying green (552 ≥ baseline) and by retrieval parity evidence (30/30 top-k identical pre/post, `ragkit/parity/`). Remaining layers (agentic, eval, codegen) move in staged follow-ups (PLAN §8).
 
 ## Current scope
 
