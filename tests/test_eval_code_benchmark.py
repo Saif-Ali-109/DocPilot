@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from docpilot.eval import code_benchmark as cb
-from docpilot.eval.benchmark import QuotaExhausted
+from ragkit.eval.benchmark import QuotaExhausted
 from docpilot.validation import RetrieveThenValidate
 
 DATASET_PATH = (

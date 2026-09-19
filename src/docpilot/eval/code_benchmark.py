@@ -24,7 +24,7 @@ requests), and avg validation turns + latency (the T4 loop cost).
 
 The runner is duck-typed — ``run(request: str) -> CodeRunOutput`` — so
 hermetic tests script every metric without a database or LLM, exactly like
-:mod:`docpilot.eval.benchmark`.  Row checkpoints (jsonl) and daily-TPD abort
+:mod:`ragkit.eval.benchmark`.  Row checkpoints (jsonl) and daily-TPD abort
 handling reuse the Phase 4 machinery (:func:`_load_done_ids`,
 :class:`QuotaExhausted`).
 """
@@ -37,7 +37,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from docpilot.eval.benchmark import (
+from ragkit.eval.benchmark import (
     QuotaExhausted,
     answer_body,
     body_markers,
@@ -93,7 +93,7 @@ class CodeBenchmarkQuestion:
 class CodeRunOutput:
     """What the code route produced for one request (duck-typed runner).
 
-    Mirrors :class:`~docpilot.eval.benchmark.RunOutput` but carries the code
+    Mirrors :class:`~ragkit.eval.benchmark.RunOutput` but carries the code
     route's verification payload so scoring never has to guess.
     """
 
@@ -368,7 +368,7 @@ def run_code_benchmark(
     ``run`` is any callable ``(request: str) -> CodeRunOutput``.  Rows are
     checkpointed to a jsonl file as they finish and ids already present are
     skipped on re-entry — a mid-run daily-TPD abort never re-burns quota on
-    scored requests (same recipe as :func:`docpilot.eval.benchmark.run_pipeline`).
+    scored requests (same recipe as :func:`ragkit.eval.benchmark.run_pipeline`).
     """
     done: set[str] = set()
     rows: list[CodeBenchmarkRow] = []
@@ -597,7 +597,11 @@ def _code_run(question: str) -> CodeRunOutput:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """``python -m docpilot.eval code-benchmark [--stamp STAMP] [--out DIR]``."""
+    """``python -m docpilot.eval.code_benchmark [--stamp STAMP] [--out DIR]``.
+
+    The ``code-benchmark`` subcommand of ``python -m ragkit.eval`` is
+    lazy-guarded until Stage 4 — until then, run this module directly.
+    """
     import argparse
 
     parser = argparse.ArgumentParser(prog="docpilot.eval code-benchmark")
