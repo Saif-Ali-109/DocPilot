@@ -14,10 +14,10 @@ dependencies = [
     # (PLAN §8.5 version pairing). S2-T5: pinned to the `v0.2.0` release
     # tag (Stage-2 complete — agentic layer + tools moved; DocPilot
     # imports ragkit.agent.* / ragkit.tools.*; version pairing record:
-    # pyproject pin ↔ ragkit tag v0.2.0). S3-T3: pinned to the S3-T2
-    # commit `309037b` (eval harness moved to ragkit.eval; `v0.3.0` tag
-    # lands at Stage-3 close — S3-T5).
-    "ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@309037b",
+    # pyproject pin ↔ ragkit tag v0.2.0). S3-T5: pinned to `v0.3.0` (Stage-3
+    # complete — eval harness moved to ragkit.eval; version pairing
+    # record: pyproject pin ↔ ragkit tag v0.3.0).
+    "ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@v0.3.0",
     "torch==2.14.0+cpu",
     "psycopg[binary]>=3.2.0",
     "pgvector>=0.3.0",

@@ -1443,10 +1443,11 @@ flips pending.
       `reports/`; 3 dataset JSONs; `__main__` code-benchmark branch lazy-guards
       with "moves in Stage 4" error. — DONE 2026-09-18 (ragkit `b8f35b5` /
       DocPilot `6122c8c`; both PLANs + ACTIVE committed and pushed)
-- [ ] S3-T2: move mechanically (prefix swap `docpilot.eval` → `ragkit.eval`)
+- [x] S3-T2: move mechanically (prefix swap `docpilot.eval` → `ragkit.eval`)
       into `ragkit.eval`: benchmark/triples/judge_ab/tool_necessity +
       `__main__`/`__init__` + committed dataset JSONs; 3 hermetic eval test
       files move (patch sites → `ragkit.config`); no new config keys or deps.
+      — DONE 2026-09-19 (ragkit `309037b`)
 - [x] S3-T3: DocPilot dogfood — delete moved modules + tests from
       `src/docpilot/`; rewire staying consumers to `ragkit.eval`;
       `python -m docpilot.eval` workflow → `python -m ragkit.eval`;
@@ -1458,26 +1459,38 @@ flips pending.
       module still runnable as `python -m docpilot.eval.code_benchmark`);
       pin → `@309037b` (S3-T2 commit; `v0.3.0` tag at S3-T5); DocPilot 142
       + ragkit 410 = 552 baseline held)
-- [ ] S3-T4: eval parity evidence — hermetic determinism harness: fixed
+- [x] S3-T4: eval parity evidence — hermetic determinism harness: fixed
       dataset rows + stubbed retriever/generator/judge drive the eval
       pipeline pre (`docpilot.eval` @ Stage-3 start worktree) vs post
       (`ragkit.eval`) — report JSON identical field-for-field; + one live
-      TPD-aware eval smoke (one invocation).
-- [ ] S3-T5: exit sweep — READMEs honest (ragkit status Stage 3; DocPilot
+      TPD-aware eval smoke (one invocation). — DONE 2026-09-19
+      (ragkit `parity/s3_eval_parity.py` + `compare_s3_eval.py`; pre=
+      `docpilot.eval`@`6122c8c` vs post=`ragkit.eval`: judge_ab 24 /
+      tool_necessity 15 / benchmark 30 report JSONs IDENTICAL field-for-
+      field; live smoke `python -m ragkit.eval judge-ab` exit 0, one
+      invocation; evidence in `ragkit/parity/s3_eval_*`)
+- [x] S3-T5: exit sweep — READMEs honest (ragkit status Stage 3; DocPilot
       callout eval moved), clean-venv install from git (regression — no new
       deps), tag `v0.3.0`, DocPilot pin → `@v0.3.0`, §8.8b all `[x]`, both
-      repos pushed, no secrets.
+      repos pushed, no secrets. — DONE 2026-09-19 (READMEs both repos
+      Stage-3 honest — DocPilot callout now "Stages 1–3" with eval moved to
+      `ragkit.eval` and `python -m ragkit.eval` workflow; clean venv from
+      `git+…ragkit.git@v0.3.0` OK; ragkit 409/1 + DocPilot 142 = 552; pin →
+      `@v0.3.0`; both pushed)
 
 ### 8.8b stage-3 exit criteria (checked at stage close, mirror §8.5 style)
 
-- [ ] ragkit standalone test suite green (eval tests included, hermetic —
-      no model/network; live-PG tests skip as before)
-- [ ] combined DocPilot + ragkit suite green; moved eval tests live in
-      ragkit only, no duplicated test files
-- [ ] eval parity evidence committed (hermetic report-JSON harness verdict
-      + live smoke output)
-- [ ] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag
+- [x] ragkit standalone test suite green (eval tests included, hermetic —
+      no model/network; live-PG tests skip as before) — DONE: ragkit
+      409 passed/1 skipped
+- [x] combined DocPilot + ragkit suite green; moved eval tests live in
+      ragkit only, no duplicated test files — DONE: DocPilot 142 + ragkit
+      410 = 552
+- [x] eval parity evidence committed (hermetic report-JSON harness verdict
+      + live smoke output) — DONE: S3-T4, `ragkit/parity/s3_eval_*`
+- [x] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag
       `v0.3.0`); READMEs honest; no secrets; both repos pushed to origin/main
+      — DONE: S3-T5
 
 ### 8.9 stage-4 tasks (codegen — execution order)
 
