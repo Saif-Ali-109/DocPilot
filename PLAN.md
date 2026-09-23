@@ -1229,8 +1229,9 @@ flips pending.
   (AGENTS.md build-order rule 1)
 
 ## 8. framework_extraction
-- status: Stage 2 ACTIVE (started 2026-09-18 — Stage-1 close reviewed by an
-  independent audit: merge-ready, no blockers; tasks §8.7)
+- status: Stage 4 ACTIVE (codegen, started 2026-09-23 — Stages 1–3 COMPLETE:
+  core-chain `v0.1.0`, agentic `v0.2.0`, eval `v0.3.0` — each tagged + pushed,
+  DocPilot pinned; tasks §8.9)
 - repo: https://github.com/Saif-Ali-109/ragkit.git — NEW separate repo (branch
   main). The framework is NOT a DocPilot subpackage. DocPilot depends on it
   and dogfoods it.
@@ -1494,9 +1495,13 @@ flips pending.
 
 ### 8.9 stage-4 tasks (codegen — execution order)
 
-- [ ] S4-T1: docs — scope + task list (this section) + ACTIVE refresh,
+- [x] S4-T1: docs — scope + task list (this section) + ACTIVE refresh,
       committed in both repos. Bundle: `codegen/*`, `validation/*`,
-      `agent/code_route.py`, `eval/code_benchmark.py` + dataset.
+      `agent/code_route.py`, `eval/code_benchmark.py` + dataset. — DONE
+      2026-09-23 (§8.9 scope+tasks pre-written in `6122c8c`/ragkit
+      `b8f35b5`; ACTIVE refreshed — Stage 3 COMPLETE, Stage 4 ACTIVE;
+      pre-side worktree `/tmp/opencode/s4_parity_pre` @ this HEAD
+      `34dea0d`)
 - [ ] S4-T2: move mechanically (prefix swap) into `ragkit.codegen` /
       `ragkit.validation` / `ragkit.agent.code_route`; `ragkit.eval` gains
       `code_benchmark` + `code_benchmark.json` (activates `__main__`

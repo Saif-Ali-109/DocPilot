@@ -3,7 +3,7 @@ title: DocPilot — ACTIVE current view
 role: derived current view — phase, gates, constants, load index
 authority: lowest — fix ACTIVE if it contradicts SPEC/PLAN
 load: read whole — the only file meant to be read whole
-last_updated: 2026-09-17
+last_updated: 2026-09-23
 ---
 
 # ACTIVE — DocPilot current view (derived, never authoritative)
@@ -18,13 +18,15 @@ last_updated: 2026-09-17
 
 - current_phase: **7 — Framework Extraction (ragkit), ACTIVE** (entered
   2026-09-17). **Stage 1 (core chain) COMPLETE 2026-09-18 (`v0.1.0`). Stage 2
-  (agentic) COMPLETE 2026-09-18 (`v0.2.0`, DocPilot pinned `@v0.2.0`). Next:
-  Stage 3 — eval harness, then Stage 4 — codegen — both start on user go.**
-- last_updated: 2026-09-18
+  (agentic) COMPLETE 2026-09-18 (`v0.2.0`). Stage 3 (eval) COMPLETE
+  2026-09-19 (`v0.3.0`, DocPilot pinned `@v0.3.0`). Stage 4 — codegen,
+  ACTIVE 2026-09-23 — the **final** extraction stage.**
+- last_updated: 2026-09-23
 - servers: uvicorn :8000 (`/api/v1/health` — store ok, ~15.3k chunks; serves
   `POST /api/v1/code`), chainlit :8050 — keep both healthy.
-- test baseline: **combined 552** (ragkit 299 + DocPilot 252; 109 tests
-  relocated zero loss).
+- test baseline: **combined 552** (ragkit 410 + DocPilot 142; unit tests
+  relocated zero loss; DocPilot can't import `docpilot.codegen`/`docpilot.validation`
+  until Stage 4 completes).
 
 ### Gate status (resolved 2026-09-12)
 
@@ -155,13 +157,41 @@ last_updated: 2026-09-17
   `@v0.2.0` (deps incl. langgraph 1.2.11 resolved; imports OK; `docpilot`
   not importable), tag `v0.2.0` (`500717d`), DocPilot pin → `@v0.2.0`,
   §3.3 / §8.7b all `[x]`, both repos pushed. **Stage 2 COMPLETE.**
-- Stages 3 & 4 planned (§8.8/§8.9): Stage 3 moves `eval/benchmark`,
-  `triples`, `judge_ab`, `tool_necessity`, `__main__`/`__init__`, 3 dataset
-  JSONs → `ragkit.eval` (hermetic eval tests + parity gate). Stage 4 moves
-  `codegen/*`, `validation/*`, `agent/code_route.py`,
-  `eval/code_benchmark.py` + dataset → `ragkit.codegen` /
-  `ragkit.validation` / `ragkit.agent.code_route` / `ragkit.eval` (3
-  CODE_* config keys). Both stages: full parity harness + 1 live smoke each.
+- 2026-09-18 S3-T1: Stage 3 (eval) kicked off — task list + exit criteria
+  written (§8.8/§8.8b); ragkit PLAN §4 mirrors it; Stage 4 (§8.9) scope
+  pre-planned in the same commit; ACTIVE refreshed both repos (`6122c8c` /
+  ragkit `b8f35b5`).
+- 2026-09-19 S3-T2: mechanical move — `docpilot.eval` → `ragkit.eval`
+  (benchmark/triples/judge_ab/tool_necessity + `__main__`/`__init__` + 3
+  dataset JSONs); 3 hermetic eval test files moved; `code_benchmark.py` +
+  `test_eval_code_benchmark.py` stay DocPilot-side (Stage 4) but rewire to
+  `ragkit.eval.benchmark`. `309037b` — ragkit 410.
+- 2026-09-19 S3-T3: DocPilot dogfood — moved eval modules + 3 tests deleted;
+  `python -m docpilot.eval` → `python -m ragkit.eval` (code-benchmark
+  dispatcher lazy-guarded "moves in Stage 4" unless run as
+  `python -m docpilot.eval.code_benchmark`); pin → `@309037b`; DocPilot 142
+  + ragkit 410 = 552.
+- 2026-09-19 S3-T4: eval parity evidence — hermetic report-JSON harness:
+  pre `docpilot.eval`@`6122c8c` (worktree) vs post (`ragkit.eval`) — report
+  JSON **IDENTICAL field-for-field** (judge_ab 24, tool_necessity 15,
+  benchmark 30); + one live TPD-aware smoke (`python -m ragkit.eval
+  judge-ab`, 48 live Groq calls). Evidence: `ragkit/parity/s3_eval_*`.
+- 2026-09-19 S3-T5: exit sweep — READMEs honest, clean-venv install from git
+  `@v0.3.0` (deps unchanged vs `v0.2.0`), tag `v0.3.0` (`f03c2e7`), DocPilot
+  pin → `@v0.3.0`, §8.8b all `[x]`, both repos pushed. **Stage 3 COMPLETE.**
+- 2026-09-23 S4-T1: Stage 4 (codegen) kicked off — §8.9 scope+tasks
+  pre-written (`6122c8c`); ACTIVE refreshed (Stage 3 COMPLETE, Stage 4
+  ACTIVE); Stage-4-start pre-side worktree created
+  (`/tmp/opencode/s4_parity_pre` @ `34dea0d`). Next: S4-T2 — mechanical
+  move of `codegen/*`, `validation/*`, `agent/code_route.py`,
+  `eval/code_benchmark.py` + dataset into ragkit.
+- Stage 4 (final, §8.9) moves `codegen/*`, `validation/*`,
+  `agent/code_route.py`, `eval/code_benchmark.py` + `code_benchmark.json` →
+  `ragkit.codegen` / `ragkit.validation` / `ragkit.agent.code_route` /
+  `ragkit.eval` (activates the code-benchmark `__main__` lazy-guard); 3
+  CODE_* config keys; 5 hermetic test files move; `test_api_code.py` stays.
+  Gate: full parity harness + 1 live codegen smoke. After S4-T5: extraction
+  complete.
 
 ## 4. Load index — read ONLY these SPEC/PLAN lines
 
@@ -179,12 +209,12 @@ Core (always) + current-phase bundle; all other rows on demand.
 | PLAN.md | §1 meta | 11–34 | core — always |
 | PLAN.md | §6.5 pre-Phase-6 hardening evidence | 915–1087 | on-demand: Phase-6 evidence |
 | PLAN.md | §7 Phase 6 plan (gated) incl. §7.5 exit criteria | 1088–1229 | on-demand: completed-phase history |
-| PLAN.md | §8 framework extraction — Stage 2 (agentic) done | 1231–1438 | completed-phase history |
-| PLAN.md | §8.8 stage-3 tasks (eval) | 1439–1480 | on-demand: stage-3 work |
-| PLAN.md | §8.9 stage-4 tasks (codegen) | 1481–1530 | on-demand: stage-4 work |
-| PLAN.md | §9 architectural discipline | 1324–1346 | core — always |
-| PLAN.md | §10 conflict resolution | 1348–1358 | core — always |
-| PLAN.md | §11 git_workflow | 1359–1391 | core — always |
+| PLAN.md | §8 framework extraction — Stages 1–4 (Stage 4 ACTIVE) | 1231–1536 | always — source-of-truth extraction plan |
+| PLAN.md | §8.8 stage-3 tasks (eval, done) | 1440–1495 | completed-phase history |
+| PLAN.md | §8.9 stage-4 tasks (codegen, ACTIVE) | 1496–1536 | on-demand: stage-4 work |
+| PLAN.md | §9 architectural discipline | 1537–1560 | core — always |
+| PLAN.md | §10 conflict resolution | 1561–1571 | core — always |
+| PLAN.md | §11 git_workflow | 1572–1604 | core — always |
 | SPEC.md | §3–§5 locked phase details | 48–572 | on-demand: task touches that phase's code (classic RAG / agent / tooling) |
 | PLAN.md | §2–§5 completed-phase history | 35–913 | on-demand: same rule (incl. §5.3 eval slices, §6 API/UI) |
 
