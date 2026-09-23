@@ -13,13 +13,13 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from docpilot.agent.code_route import run_code_route
+from ragkit.agent.code_route import run_code_route
 from docpilot.api.app import create_app
 from docpilot.api.service import code_events
 from docpilot.api.sse import parse_sse_block
 from docpilot.api.store import SessionStore
 from ragkit.core.models import Chunk, RetrieverResult
-from docpilot.validation import RetrieveThenValidate
+from ragkit.validation import RetrieveThenValidate
 
 QUESTION = "Write code for a minimal FastAPI app with a GET route."
 

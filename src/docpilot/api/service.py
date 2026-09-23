@@ -33,7 +33,7 @@ import time
 from typing import Callable
 
 from docpilot import config
-from docpilot.agent.code_route import run_code_route
+from ragkit.agent.code_route import run_code_route
 from ragkit.agent.gate import HeuristicQueryClassifier
 from ragkit.agent.graph import trace_step_to_dict
 from ragkit.agent.pipeline_agentic import agentic_ask
@@ -42,7 +42,7 @@ from ragkit.agent.types import LoopTraceStep
 from ragkit.citations.engine import StandardCitationEngine
 from ragkit.core.direct import _run_direct_core
 from ragkit.core.models import SourceRef, derive_source_kind
-from docpilot.validation.verdict import CheckStatus, ValidationVerdict
+from ragkit.validation.verdict import CheckStatus, ValidationVerdict
 
 logger = logging.getLogger(__name__)
 

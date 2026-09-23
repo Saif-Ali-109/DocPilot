@@ -23,6 +23,9 @@ from ragkit.config import (
     AGENT_JUDGE_SKIP_MIN_SCORE,
     AGENT_LOOP_TOP_K,
     AGENT_MAX_RETRIES,
+    CODE_INTENT_PHRASES,
+    CODE_ROUTE_ENABLED,
+    CODE_VALIDATE_MAX_TURNS,
     EMBEDDING_MODEL,
     GITHUB_API_BASE,
     GITHUB_OWNER,
@@ -152,40 +155,9 @@ AGENT_DEFAULT_STRATEGY: str = os.getenv("AGENT_DEFAULT_STRATEGY", "auto")
 # logged); it is never a hard-required secret (no ``_require``).
 
 # --- Phase 6: Code generation / validation (SPEC §8, PLAN §7) ---
-CODE_ROUTE_ENABLED: bool = os.getenv("CODE_ROUTE_ENABLED", "0") == "1"
-"""Arm the opt-in code route (PLAN §7.2 T3).
-
-``0`` (default OFF): the code path is never reached through query routing —
-only an explicit per-request opt-in (``explicit_code=True``) can take it.
-``1`` arms the classifier-driven route: queries that look like code requests
-(``CODE_INTENT_PHRASES``) may be answered with generated code.  Non-code
-queries always fall back to the standard answer path, byte-identical to the
-levers-off baseline (§7.5)."""
-
-CODE_VALIDATE_MAX_TURNS: int = int(os.getenv("CODE_VALIDATE_MAX_TURNS", "2"))
-"""Maximum validation/reformulation iterations on the code route (PLAN §7.2 T4).
-
-The T4 loop generates code, validates it with the T1 ``CodeValidator`` and,
-on a failed verdict, feeds the failure reasons back for one rewrite per turn.
-After ``CODE_VALIDATE_MAX_TURNS`` rewrites (so 1 initial + N fixes) a still
-failing output is **not returned** — the route answers with a "couldn't
-validate" refusal plus the retrieved sources (§7.5: unvalidated code is never
-returned)."""
-
-CODE_INTENT_PHRASES: tuple[str, ...] = (
-    "write code", "write a function", "write a class", "write an example",
-    "generate code", "generate a function", "generate an example",
-    "code snippet", "code example", "example code", "sample code",
-    "show me the code", "show code", "give me the code",
-    "how do i write", "how do i implement", "how can i write",
-    "implement a function", "implement a class", "implementation for",
-)
-"""Deterministic code-intent seed phrases (PLAN §7.2 T3).
-
-Matched case-insensitively against the normalised query (same normalisation
-as the Phase 2 heuristic gate, ``agent/gate.py``).  A documented seed list —
-like the gate's connector vocabulary it gets tuned against corpus-observed
-phrasings, never extended ad hoc during a run."""
+# CODE_ROUTE_ENABLED / CODE_VALIDATE_MAX_TURNS / CODE_INTENT_PHRASES are owned
+# by ragkit.config (imported above) — the same env keys and defaults DocPilot
+# used to define here, now single-sourced in the framework.
 
 # --- Phase 5: API + UI (SPEC §7) ---
 DOCPILOT_DB_PATH: str = os.getenv("DOCPILOT_DB_PATH", "data/docpilot.sqlite3")
