@@ -1229,9 +1229,9 @@ flips pending.
   (AGENTS.md build-order rule 1)
 
 ## 8. framework_extraction
-- status: Stage 4 ACTIVE (codegen, started 2026-09-23 — Stages 1–3 COMPLETE:
-  core-chain `v0.1.0`, agentic `v0.2.0`, eval `v0.3.0` — each tagged + pushed,
-  DocPilot pinned; tasks §8.9)
+- status: Stage 4 COMPLETE 2026-09-23 `v0.4.0` — **extraction complete**
+  (all §8.4 bundles moved; Stages 1–3 COMPLETE: core-chain `v0.1.0`, agentic
+  `v0.2.0`, eval `v0.3.0` — each tagged + pushed, DocPilot pinned; tasks §8.9)
 - repo: https://github.com/Saif-Ali-109/ragkit.git — NEW separate repo (branch
   main). The framework is NOT a DocPilot subpackage. DocPilot depends on it
   and dogfoods it.
@@ -1525,22 +1525,28 @@ flips pending.
       validation / code_route / code_benchmark payloads **IDENTICAL**; one
       live Groq smoke — PASS (3 checks), 1 attempt; report
       `ragkit/parity/s4_codegen_parity_report.md`).
-- [ ] S4-T5: exit sweep — READMEs honest, clean-venv install from git
+- [x] S4-T5: exit sweep — READMEs honest, clean-venv install from git
       (regression), tag `v0.4.0`, DocPilot pin → `@v0.4.0`, §8.9b all `[x]`,
       both repos pushed, no secrets; **all §8.4 bundles moved → extraction
-      complete**.
+      complete**. — DONE 2026-09-23 (READMEs Stage-4 honest in both repos —
+      DocPilot callout "Stages 1–4" with codegen moved to
+      `ragkit.codegen`/`ragkit.validation`; clean venv from
+      `git+…ragkit.git@v0.4.0` OK — ragkit imports, `docpilot` not
+      importable; tag `v0.4.0` (ragkit `8c3c4c5`); pin → `@v0.4.0`; §8.9b
+      all `[x]`; both pushed; no secrets; all §8.4 bundles moved →
+      extraction complete).
 
 ### 8.9b stage-4 exit criteria (checked at stage close, mirror §8.5 style)
 
-- [ ] ragkit standalone test suite green (codegen/validation/code_route
-      tests included, hermetic)
-- [ ] combined DocPilot + ragkit suite green; moved tests live in ragkit
-      only
-- [ ] codegen parity evidence committed (hermetic harness verdict + live
-      smoke output)
-- [ ] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag
+- [x] ragkit standalone test suite green (codegen/validation/code_route
+      tests included, hermetic) — DONE: ragkit 467 passed/1 skipped
+- [x] combined DocPilot + ragkit suite green; moved tests live in ragkit
+      only — DONE: DocPilot 84 + ragkit 468 = 552
+- [x] codegen parity evidence committed (hermetic harness verdict + live
+      smoke output) — DONE: S4-T4, `ragkit/parity/s4_codegen_*`
+- [x] version pairing recorded (DocPilot pyproject pin ↔ ragkit tag
       `v0.4.0`); READMEs honest; no secrets; both repos pushed to
-      origin/main; all deferred bundles moved
+      origin/main; all deferred bundles moved — DONE: extraction complete
 
 ## 9. architectural_discipline
 - interfaces:

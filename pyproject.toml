@@ -16,10 +16,10 @@ dependencies = [
     # imports ragkit.agent.* / ragkit.tools.*; version pairing record:
     # pyproject pin ↔ ragkit tag v0.2.0). S3-T5: pinned to `v0.3.0` (Stage-3
     # complete — eval harness moved to ragkit.eval; version pairing
-    # record: pyproject pin ↔ ragkit tag v0.3.0). S4-T3: pinned to the
-    # `2dd9bb3` release commit (Stage-4 S4-T2 — codegen + validation +
-    # code_route + code_benchmark moved to ragkit; `v0.4.0` tag at S4-T5).
-    "ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@2dd9bb3",
+    # record: pyproject pin ↔ ragkit tag v0.3.0). S4-T5: pinned to `v0.4.0`
+    # (Stage-4 complete — codegen + validation + code_route + code_benchmark
+    # moved to ragkit; extraction complete; all §8.4 bundles moved).
+    "ragkit @ git+https://github.com/Saif-Ali-109/ragkit.git@v0.4.0",
     "torch==2.14.0+cpu",
     "psycopg[binary]>=3.2.0",
     "pgvector>=0.3.0",
