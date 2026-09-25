@@ -1516,10 +1516,15 @@ flips pending.
       + tests; config re-exports the 3 `CODE_*` keys; pin bump; combined
       suite green. — DONE 2026-09-23 (deletions + rewires + §8.9 ticks in
       this commit; pin → `@2dd9bb3`; combined 84 + 468 = 552).
-- [ ] S4-T4: codegen parity evidence — hermetic determinism harness:
+- [x] S4-T4: codegen parity evidence — hermetic determinism harness:
       stubbed generator/judge — validation verdicts + emitted code identical
       pre (`docpilot.*` @ Stage-4 start worktree) vs post (`ragkit.*`); +
-      one live codegen smoke (TPD-aware, one invocation).
+      one live codegen smoke (TPD-aware, one invocation). — DONE 2026-09-23
+      (harness `ragkit/parity/s4_codegen_parity.py` + `compare_s4_codegen.py`;
+      pre=`docpilot.*`@`34dea0d` vs post=`ragkit.*`@`127cfb0`: codegen /
+      validation / code_route / code_benchmark payloads **IDENTICAL**; one
+      live Groq smoke — PASS (3 checks), 1 attempt; report
+      `ragkit/parity/s4_codegen_parity_report.md`).
 - [ ] S4-T5: exit sweep — READMEs honest, clean-venv install from git
       (regression), tag `v0.4.0`, DocPilot pin → `@v0.4.0`, §8.9b all `[x]`,
       both repos pushed, no secrets; **all §8.4 bundles moved → extraction
